@@ -1,0 +1,1267 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>manicalendar - Manajemen Aktifitas Sekolah</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            emerald: {
+              50: '#f0fdf4',
+              100: '#dcfce7',
+              200: '#bbf7d0',
+              300: '#86efac',
+              400: '#4ade80',
+              500: '#22c55e',
+              600: '#16a34a',
+              700: '#15803d',
+              800: '#166534',
+              900: '#14532d',
+              950: '#052e16',
+            },
+            islamic: {
+              gold: '#D4AF37',
+              dark: '#0B2B26',
+              mint: '#235E52',
+              light: '#F4F7F6',
+              accent: '#E5A93B'
+            }
+          },
+          fontFamily: {
+            sans: ['Plus Jakarta Sans', 'Inter', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Google Fonts & FontAwesome -->
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- React & Babel CDNs -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- PWA Metadata & iOS Support -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0B2B26">
+  
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .arabic-text {
+      font-family: 'Amiri', serif;
+    }
+    /* Hide scrollbars but keep functionality */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .glass-card {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+    }
+    .dark .glass-card {
+      background: rgba(11, 43, 38, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .sholat-card {
+      background: linear-gradient(135deg, #0B2B26 0%, #1c4d44 100%);
+    }
+  </style>
+</head>
+<body class="bg-[#F4F7F6] text-slate-800 dark:bg-stone-950 dark:text-stone-100 min-h-screen flex flex-col transition-colors duration-300 pb-20">
+
+  <div id="root" class="flex-grow flex flex-col"></div>
+
+  <!-- Interactive React Application Code -->
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    function App() {
+      // Configuration & Base States
+      const [apiConnected, setApiConnected] = useState(false);
+      const [apiUrl, setApiUrl] = useState(() => localStorage.getItem('gas_api_url') || '');
+      const [currentUser, setCurrentUser] = useState(() => {
+        const saved = localStorage.getItem('active_user');
+        return saved ? JSON.parse(saved) : null;
+      });
+      const [currentTab, setCurrentTab] = useState('home'); // home | calendar | quran | settings
+      const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
+      
+      // Data States
+      const [users, setUsers] = useState([]);
+      const [todos, setTodos] = useState([]);
+      const [syncing, setSyncing] = useState(false);
+      
+      // Authentication States
+      const [isRegisterMode, setIsRegisterMode] = useState(false);
+      const [regForm, setRegForm] = useState({ username: '', email: '', password: '' });
+      const [loginForm, setLoginForm] = useState({ username: '', password: '' });
+      const [authError, setAuthError] = useState('');
+      const [authSuccess, setAuthSuccess] = useState('');
+
+      // Task/Activity Modal Form State
+      const [isModalOpen, setIsModalOpen] = useState(false);
+      const [selectedDate, setSelectedDate] = useState(null);
+      const [activityForm, setActivityForm] = useState({
+        id: '',
+        task: '',
+        subActivity: '',
+        pic: '',
+        startDate: '',
+        endDate: '',
+        progress: 0,
+        createdBy: ''
+      });
+      const [isEditing, setIsEditing] = useState(false);
+
+      // Quran Component States
+      const [quranSurahs, setQuranSurahs] = useState([]);
+      const [selectedSurah, setSelectedSurah] = useState(null);
+      const [surahDetails, setSurahDetails] = useState(null);
+      const [loadingQuran, setLoadingQuran] = useState(false);
+      const [playingAudio, setPlayingAudio] = useState(null); // { url, id }
+      const [quranSearch, setQuranSearch] = useState('');
+      
+      const audioRef = useRef(null);
+
+      // Static Backup/Demo Data (When API not configured)
+      const fallbackTodos = [
+        { id: '1', task: 'Ujian Tengah Semester', subActivity: 'Persiapan lembar soal & pengawas', pic: 'Ust. Ahmad', startDate: '2026-06-01', endDate: '2026-06-05', progress: 50, createdBy: 'admin' },
+        { id: '2', task: 'Rapat Kerja Tahunan', subActivity: 'Penyusunan anggaran belanja sekolah', pic: 'Bu Aminah', startDate: '2026-06-10', endDate: '2026-06-12', progress: 100, createdBy: 'admin' },
+        { id: '3', task: 'Penerimaan Santri Baru', subActivity: 'Seleksi berkas & wawancara', pic: 'Ust. Zulkifli', startDate: '2026-06-15', endDate: '2026-06-20', progress: 20, createdBy: 'admin' }
+      ];
+
+      // Theme toggle handler
+      useEffect(() => {
+        const rootClass = document.documentElement.classList;
+        if (theme === 'dark') {
+          rootClass.add('dark');
+        } else {
+          rootClass.remove('dark');
+        }
+        localStorage.setItem('theme', theme);
+      }, [theme]);
+
+      // Handle Data Synchronization with Google Sheets API
+      const syncWithCloud = async (urlToUse = apiUrl) => {
+        if (!urlToUse) {
+          // If no API URL is set, load from localStorage or fallback
+          const localTodos = localStorage.getItem('local_todos');
+          if (localTodos) {
+            setTodos(JSON.parse(localTodos));
+          } else {
+            setTodos(fallbackTodos);
+            localStorage.setItem('local_todos', JSON.stringify(fallbackTodos));
+          }
+          setApiConnected(false);
+          return;
+        }
+
+        setSyncing(true);
+        try {
+          // Fetch Todos
+          const todosRes = await fetch(`${urlToUse}?action=getTodos`);
+          const todosData = await todosRes.json();
+          if (todosData.status === 'success') {
+            setTodos(todosData.data);
+            localStorage.setItem('local_todos', JSON.stringify(todosData.data));
+            setApiConnected(true);
+          } else {
+            throw new Error(todosData.message);
+          }
+        } catch (error) {
+          console.warn('Sync failed, using offline cache.', error);
+          const localTodos = localStorage.getItem('local_todos');
+          setTodos(localTodos ? JSON.parse(localTodos) : fallbackTodos);
+          setApiConnected(false);
+        } finally {
+          setSyncing(false);
+        }
+      };
+
+      // Periodic Auto-Sync and Initial Sync
+      useEffect(() => {
+        syncWithCloud();
+        loadQuranSurahs();
+      }, [apiUrl]);
+
+      // Initialize default users if not set
+      useEffect(() => {
+        const localUsers = localStorage.getItem('local_users');
+        if (!localUsers) {
+          const defaultUsers = [
+            { username: 'admin', email: 'admin@manicalendar.com', password: '123', role: 'admin' },
+            { username: 'rafliano', email: 'rafliano@school.id', password: '123', role: 'admin' },
+            { username: 'guru1', email: 'guru@school.id', password: '123', role: 'user' }
+          ];
+          localStorage.setItem('local_users', JSON.stringify(defaultUsers));
+          setUsers(defaultUsers);
+        } else {
+          setUsers(JSON.parse(localUsers));
+        }
+      }, []);
+
+      // Load Quran Surahs
+      const loadQuranSurahs = async () => {
+        setLoadingQuran(true);
+        try {
+          const res = await fetch('https://api.alquran.cloud/v1/surah');
+          const data = await res.json();
+          if (data.code === 200) {
+            setQuranSurahs(data.data);
+          }
+        } catch (err) {
+          console.error("Gagal memuat surat Al-Quran", err);
+        } finally {
+          setLoadingQuran(false);
+        }
+      };
+
+      // Load Surah Details with Indonesian translation
+      const viewSurahDetails = async (surahNumber) => {
+        setLoadingQuran(true);
+        try {
+          // Fetch Arabic text
+          const resAr = await fetch(`https://api.alquran.cloud/v1/surah/${surahNumber}/editions/quran-uthmani,id.indonesian,ar.alafasy`);
+          const data = await resAr.json();
+          if (data.code === 200) {
+            setSurahDetails({
+              info: data.data[0],
+              verses: data.data[0].ayahs.map((ayah, index) => ({
+                number: ayah.numberInSurah,
+                text: ayah.text,
+                translation: data.data[1].ayahs[index].text,
+                audio: data.data[2].ayahs[index].audio
+              }))
+            });
+            setSelectedSurah(surahNumber);
+          }
+        } catch (err) {
+          console.error("Gagal memuat detail surat", err);
+        } finally {
+          setLoadingQuran(false);
+        }
+      };
+
+      // Play Quranic audio recitation
+      const handlePlayAudio = (audioUrl, verseId) => {
+        if (playingAudio && playingAudio.id === verseId) {
+          audioRef.current.pause();
+          setPlayingAudio(null);
+        } else {
+          if (audioRef.current) {
+            audioRef.current.pause();
+          }
+          audioRef.current = new Audio(audioUrl);
+          audioRef.current.play();
+          setPlayingAudio({ url: audioUrl, id: verseId });
+          audioRef.current.onended = () => setPlayingAudio(null);
+        }
+      };
+
+      // Registration Handler
+      const handleRegister = async (e) => {
+        e.preventDefault();
+        setAuthError('');
+        setAuthSuccess('');
+
+        if (!regForm.username || !regForm.email || !regForm.password) {
+          setAuthError('Mohon isi semua field registrasi!');
+          return;
+        }
+
+        const usernameLower = regForm.username.toLowerCase();
+        const emailLower = regForm.email.toLowerCase();
+
+        if (apiUrl) {
+          setSyncing(true);
+          try {
+            const response = await fetch(apiUrl, {
+              method: 'POST',
+              mode: 'cors',
+              headers: { 'Content-Type': 'text/plain' },
+              body: JSON.stringify({
+                action: 'registerUser',
+                username: usernameLower,
+                email: emailLower,
+                password: regForm.password
+              })
+            });
+            const data = await response.json();
+            if (data.status === 'success') {
+              setAuthSuccess('Registrasi berhasil! Akun Anda sedang menunggu verifikasi admin.');
+              setIsRegisterMode(false);
+            } else {
+              setAuthError(data.message || 'Registrasi gagal.');
+            }
+          } catch (err) {
+            setAuthError('Gagal terhubung ke cloud backend.');
+          } finally {
+            setSyncing(false);
+          }
+        } else {
+          // Offline local mode registration
+          const currentLocalUsers = JSON.parse(localStorage.getItem('local_users') || '[]');
+          const exists = currentLocalUsers.some(u => u.username.toLowerCase() === usernameLower || u.email.toLowerCase() === emailLower);
+          
+          if (exists) {
+            setAuthError('Username atau Email sudah terdaftar sebelumnya!');
+            return;
+          }
+
+          const newUser = {
+            username: usernameLower,
+            email: emailLower,
+            password: regForm.password,
+            role: currentLocalUsers.length === 0 ? 'admin' : 'user' // First user becomes admin automatically
+          };
+
+          const updatedUsers = [...currentLocalUsers, newUser];
+          localStorage.setItem('local_users', JSON.stringify(updatedUsers));
+          setUsers(updatedUsers);
+          setAuthSuccess(`Registrasi berhasil! Anda terdaftar sebagai ${newUser.role.toUpperCase()}`);
+          setIsRegisterMode(false);
+        }
+      };
+
+      // Login Handler
+      const handleLogin = async (e) => {
+        e.preventDefault();
+        setAuthError('');
+        
+        if (!loginForm.username || !loginForm.password) {
+          setAuthError('Mohon isi username dan password!');
+          return;
+        }
+
+        const queryStr = loginForm.username.toLowerCase();
+
+        if (apiUrl) {
+          setSyncing(true);
+          try {
+            // Get users list to authenticate
+            const res = await fetch(`${apiUrl}?action=getUsers`);
+            const data = await res.json();
+            if (data.status === 'success') {
+              const matchedUser = data.data.find(u => 
+                (u.username.toLowerCase() === queryStr || u.email.toLowerCase() === queryStr) && 
+                u.password.toString() === loginForm.password.toString()
+              );
+
+              if (matchedUser) {
+                const userSession = {
+                  username: matchedUser.username,
+                  email: matchedUser.email,
+                  role: matchedUser.role || 'user'
+                };
+                setCurrentUser(userSession);
+                localStorage.setItem('active_user', JSON.stringify(userSession));
+                syncWithCloud();
+              } else {
+                setAuthError('Username atau password salah / Belum disetujui.');
+              }
+            } else {
+              setAuthError('Error memverifikasi kredensial.');
+            }
+          } catch (err) {
+            setAuthError('Backend Cloud tidak merespon. Mencoba login offline lokal...');
+            // Fallback to local authentication
+            attemptLocalLogin(queryStr);
+          } finally {
+            setSyncing(false);
+          }
+        } else {
+          attemptLocalLogin(queryStr);
+        }
+      };
+
+      const attemptLocalLogin = (queryStr) => {
+        const currentLocalUsers = JSON.parse(localStorage.getItem('local_users') || '[]');
+        const matched = currentLocalUsers.find(u => 
+          (u.username.toLowerCase() === queryStr || u.email.toLowerCase() === queryStr) && 
+          u.password.toString() === loginForm.password.toString()
+        );
+
+        if (matched) {
+          const userSession = {
+            username: matched.username,
+            email: matched.email,
+            role: matched.role
+          };
+          setCurrentUser(userSession);
+          localStorage.setItem('active_user', JSON.stringify(userSession));
+          syncWithCloud();
+        } else {
+          setAuthError('Username atau password salah (Koneksi Lokal).');
+        }
+      };
+
+      // Logout Handler
+      const handleLogout = () => {
+        setCurrentUser(null);
+        localStorage.removeItem('active_user');
+        if (audioRef.current) {
+          audioRef.current.pause();
+        }
+        setPlayingAudio(null);
+      };
+
+      // Create or Update Activity (Rencana Kerja)
+      const handleSaveActivity = async (e) => {
+        e.preventDefault();
+        if (currentUser.role !== 'admin') {
+          alert('Hanya Administrator yang dapat memanipulasi rencana kerja!');
+          return;
+        }
+
+        const payload = {
+          action: 'saveTodo',
+          id: activityForm.id || Date.now().toString(),
+          task: activityForm.task,
+          subActivity: activityForm.subActivity,
+          pic: activityForm.pic,
+          startDate: activityForm.startDate || new Date().toISOString().split('T')[0],
+          endDate: activityForm.endDate,
+          progress: Number(activityForm.progress),
+          createdBy: currentUser.username
+        };
+
+        if (apiUrl) {
+          setSyncing(true);
+          try {
+            const res = await fetch(apiUrl, {
+              method: 'POST',
+              mode: 'cors',
+              headers: { 'Content-Type': 'text/plain' },
+              body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (data.status === 'success') {
+              setIsModalOpen(false);
+              syncWithCloud();
+            } else {
+              alert('Gagal menyimpan aktivitas ke spreadsheet: ' + data.message);
+            }
+          } catch (err) {
+            alert('Koneksi Cloud gagal. Disimpan ke penyimpanan lokal.');
+            saveActivityLocally(payload);
+          } finally {
+            setSyncing(false);
+          }
+        } else {
+          saveActivityLocally(payload);
+        }
+      };
+
+      const saveActivityLocally = (payload) => {
+        const localList = JSON.parse(localStorage.getItem('local_todos') || JSON.stringify(fallbackTodos));
+        let updatedList;
+        const existsIdx = localList.findIndex(t => t.id.toString() === payload.id.toString());
+        if (existsIdx !== -1) {
+          updatedList = [...localList];
+          updatedList[existsIdx] = payload;
+        } else {
+          updatedList = [payload, ...localList];
+        }
+        setTodos(updatedList);
+        localStorage.setItem('local_todos', JSON.stringify(updatedList));
+        setIsModalOpen(false);
+      };
+
+      // Delete Activity
+      const handleDeleteActivity = async (activityId) => {
+        if (!confirm('Apakah Anda yakin ingin menghapus rencana kerja ini?')) return;
+
+        if (apiUrl) {
+          setSyncing(true);
+          try {
+            const res = await fetch(apiUrl, {
+              method: 'POST',
+              mode: 'cors',
+              headers: { 'Content-Type': 'text/plain' },
+              body: JSON.stringify({ action: 'deleteTodo', id: activityId })
+            });
+            const data = await res.json();
+            if (data.status === 'success') {
+              syncWithCloud();
+            } else {
+              alert('Gagal menghapus dari Cloud Spreadsheet: ' + data.message);
+            }
+          } catch (err) {
+            deleteActivityLocally(activityId);
+          } finally {
+            setSyncing(false);
+          }
+        } else {
+          deleteActivityLocally(activityId);
+        }
+      };
+
+      const deleteActivityLocally = (activityId) => {
+        const localList = JSON.parse(localStorage.getItem('local_todos') || '[]');
+        const updatedList = localList.filter(t => t.id.toString() !== activityId.toString());
+        setTodos(updatedList);
+        localStorage.setItem('local_todos', JSON.stringify(updatedList));
+      };
+
+      // Fast Progress to 100% (Done)
+      const handleMarkDone = async (activity) => {
+        if (currentUser.role !== 'admin') return;
+        const updatedActivity = { ...activity, progress: 100 };
+        
+        if (apiUrl) {
+          setSyncing(true);
+          try {
+            const res = await fetch(apiUrl, {
+              method: 'POST',
+              mode: 'cors',
+              headers: { 'Content-Type': 'text/plain' },
+              body: JSON.stringify({
+                action: 'saveTodo',
+                ...updatedActivity
+              })
+            });
+            const data = await res.json();
+            if (data.status === 'success') {
+              syncWithCloud();
+            }
+          } catch (err) {
+            saveActivityLocally(updatedActivity);
+          } finally {
+            setSyncing(false);
+          }
+        } else {
+          saveActivityLocally(updatedActivity);
+        }
+      };
+
+      // Open creation modal for a specific calendar date clicked
+      const handleDateClick = (dateStr) => {
+        if (currentUser.role !== 'admin') {
+          alert('Hanya Administrator yang dapat menambahkan jadwal rencana kerja.');
+          return;
+        }
+        setSelectedDate(dateStr);
+        setActivityForm({
+          id: '',
+          task: '',
+          subActivity: '',
+          pic: '',
+          startDate: dateStr,
+          endDate: dateStr,
+          progress: 0,
+          createdBy: currentUser.username
+        });
+        setIsEditing(false);
+        setIsModalOpen(true);
+      };
+
+      // Open edit form
+      const handleEditClick = (activity) => {
+        setActivityForm({
+          id: activity.id,
+          task: activity.task,
+          subActivity: activity.subActivity,
+          pic: activity.pic,
+          startDate: activity.startDate,
+          endDate: activity.endDate,
+          progress: activity.progress,
+          createdBy: activity.createdBy
+        });
+        setIsEditing(true);
+        setIsModalOpen(true);
+      };
+
+      // Save database setting URL
+      const saveSettings = (e) => {
+        e.preventDefault();
+        localStorage.setItem('gas_api_url', apiUrl);
+        syncWithCloud(apiUrl);
+        alert('Tautan Google Apps Script berhasil diperbarui!');
+      };
+
+      // Hijri Calendar Calculations Helpers (Approximations)
+      const getHijriDate = () => {
+        const today = new Date();
+        const options = { calendar: 'islamic-umalqura', day: 'numeric', month: 'long', year: 'numeric' };
+        return new Intl.DateTimeFormat('id-ID-u-ca-islamic-umalqura', options).format(today);
+      };
+
+      return (
+        <div class="flex-grow flex flex-col">
+          {/* Header Bar */}
+          <header class="bg-islamic-dark text-white px-4 py-3 sticky top-0 z-30 shadow-md flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <div class="bg-islamic-gold text-islamic-dark p-2 rounded-xl flex items-center justify-center">
+                <i class="fa-solid fa-mosque text-lg"></i>
+              </div>
+              <div>
+                <h1 class="text-lg font-bold tracking-tight">mani<span class="text-islamic-gold">calendar</span></h1>
+                <p class="text-xs text-stone-300 font-medium">Islamic Activity Planner</p>
+              </div>
+            </div>
+
+            <div class="flex items-center space-x-3">
+              {/* Theme Toggle */}
+              <button 
+                onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+                class="p-2 rounded-lg hover:bg-stone-800 transition-colors"
+                title="Ganti Tema"
+              >
+                {theme === 'light' ? <i class="fa-solid fa-moon"></i> : <i class="fa-solid fa-sun"></i>}
+              </button>
+
+              {/* Status Badge */}
+              <span class={`text-[10px] px-2 py-1 rounded-full font-bold uppercase ${apiConnected ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'}`}>
+                {apiConnected ? <i class="fa-solid fa-cloud-sun mr-1"></i> : <i class="fa-solid fa-wifi mr-1"></i>}
+                {apiConnected ? 'Cloud Terkoneksi' : 'Mode Lokal'}
+              </span>
+
+              {currentUser && (
+                <button 
+                  onClick={handleLogout}
+                  class="bg-rose-600/35 hover:bg-rose-600 border border-rose-500/40 text-rose-200 text-xs px-3 py-1.5 rounded-xl font-medium transition-all"
+                >
+                  <i class="fa-solid fa-right-from-bracket mr-1"></i>Keluar
+                </button>
+              )}
+            </div>
+          </header>
+
+          {/* Non-Authenticated State (Login & Register) */}
+          {!currentUser ? (
+            <main class="flex-grow flex items-center justify-center p-4">
+              <div class="w-full max-w-md glass-card rounded-3xl shadow-2xl overflow-hidden p-6 border transition-all">
+                <div class="text-center mb-6">
+                  <div class="inline-block bg-islamic-mint text-islamic-gold p-4 rounded-3xl mb-3 shadow-inner">
+                    <i class="fa-solid fa-calendar-check text-3xl"></i>
+                  </div>
+                  <h2 class="text-2xl font-extrabold text-islamic-dark dark:text-stone-100">Selamat Datang di ManiCalendar</h2>
+                  <p class="text-xs text-stone-500 dark:text-stone-400 mt-1">Platform Manajemen Aktivitas & Agenda Harian Sekolah Modern</p>
+                </div>
+
+                {authError && (
+                  <div class="bg-red-500/10 border border-red-500/30 text-red-500 text-xs p-3 rounded-xl mb-4 text-center">
+                    <i class="fa-solid fa-triangle-exclamation mr-1"></i> {authError}
+                  </div>
+                )}
+                
+                {authSuccess && (
+                  <div class="bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 text-xs p-3 rounded-xl mb-4 text-center">
+                    <i class="fa-solid fa-circle-check mr-1"></i> {authSuccess}
+                  </div>
+                )}
+
+                {isRegisterMode ? (
+                  /* Register Form */
+                  <form onSubmit={handleRegister} class="space-y-4">
+                    <div>
+                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Username / Nama Lengkap</label>
+                      <input 
+                        type="text" 
+                        required
+                        class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        placeholder="Contoh: Rafliano"
+                        value={regForm.username}
+                        onChange={(e) => setRegForm({ ...regForm, username: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Alamat Email</label>
+                      <input 
+                        type="email" 
+                        required
+                        class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        placeholder="Contoh: rafli@school.id"
+                        value={regForm.email}
+                        onChange={(e) => setRegForm({ ...regForm, email: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Password</label>
+                      <input 
+                        type="password" 
+                        required
+                        class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        placeholder="••••••••"
+                        value={regForm.password}
+                        onChange={(e) => setRegForm({ ...regForm, password: e.target.value })}
+                      />
+                    </div>
+                    
+                    <button 
+                      type="submit" 
+                      disabled={syncing}
+                      class="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-islamic-mint text-white font-bold transition-all transform active:scale-95 disabled:opacity-50"
+                    >
+                      {syncing ? <i class="fa-solid fa-spinner animate-spin"></i> : 'Daftar Akun Baru'}
+                    </button>
+
+                    <div class="text-center text-xs text-stone-500 mt-4">
+                      Sudah punya akun?{' '}
+                      <button type="button" onClick={() => { setIsRegisterMode(false); setAuthError(''); }} class="text-emerald-600 font-bold hover:underline">Masuk disini</button>
+                    </div>
+                  </form>
+                ) : (
+                  /* Login Form */
+                  <form onSubmit={handleLogin} class="space-y-4">
+                    <div>
+                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Username atau Email</label>
+                      <input 
+                        type="text" 
+                        required
+                        class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        placeholder="Masukkan Username atau Email"
+                        value={loginForm.username}
+                        onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Password</label>
+                      <input 
+                        type="password" 
+                        required
+                        class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        placeholder="••••••••"
+                        value={loginForm.password}
+                        onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                      />
+                    </div>
+                    
+                    <button 
+                      type="submit" 
+                      disabled={syncing}
+                      class="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-islamic-mint text-white font-bold transition-all transform active:scale-95 disabled:opacity-50"
+                    >
+                      {syncing ? <i class="fa-solid fa-spinner animate-spin"></i> : 'Masuk Aplikasi'}
+                    </button>
+
+                    <div class="text-center text-xs text-stone-500 mt-4">
+                      Belum memiliki akun?{' '}
+                      <button type="button" onClick={() => { setIsRegisterMode(true); setAuthError(''); }} class="text-emerald-600 font-bold hover:underline">Registrasi disini</button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            </main>
+          ) : (
+            /* Authenticated Application Panels */
+            <main class="flex-grow max-w-4xl w-full mx-auto p-4 flex flex-col space-y-4">
+              
+              {/* Tab navigation */}
+              <div class="flex justify-around bg-white dark:bg-stone-900 p-1.5 rounded-2xl shadow-sm border border-stone-100 dark:border-stone-800">
+                <button 
+                  onClick={() => setCurrentTab('home')}
+                  class={`flex-1 py-3 text-xs font-bold rounded-xl transition-all ${currentTab === 'home' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
+                >
+                  <i class="fa-solid fa-home text-base block mb-1 text-center"></i> Beranda
+                </button>
+                <button 
+                  onClick={() => setCurrentTab('calendar')}
+                  class={`flex-1 py-3 text-xs font-bold rounded-xl transition-all ${currentTab === 'calendar' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
+                >
+                  <i class="fa-solid fa-calendar-alt text-base block mb-1 text-center"></i> Kalender
+                </button>
+                <button 
+                  onClick={() => setCurrentTab('quran')}
+                  class={`flex-1 py-3 text-xs font-bold rounded-xl transition-all ${currentTab === 'quran' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
+                >
+                  <i class="fa-solid fa-book-quran text-base block mb-1 text-center"></i> Quran
+                </button>
+                <button 
+                  onClick={() => setCurrentTab('settings')}
+                  class={`flex-1 py-3 text-xs font-bold rounded-xl transition-all ${currentTab === 'settings' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
+                >
+                  <i class="fa-solid fa-cog text-base block mb-1 text-center"></i> Sistem
+                </button>
+              </div>
+
+              {/* Tab 1: Home Dashboard */}
+              {currentTab === 'home' && (
+                <div class="space-y-4">
+                  {/* Assalamualaikum Greeting Card */}
+                  <div class="sholat-card text-white p-6 rounded-3xl relative overflow-hidden shadow-xl">
+                    <div class="absolute right-[-20px] top-[-20px] opacity-10">
+                      <i class="fa-solid fa-mosque text-9xl"></i>
+                    </div>
+                    <div class="relative z-10">
+                      <span class="text-[10px] uppercase font-bold tracking-widest text-emerald-300">Selamat Datang</span>
+                      <h3 class="text-2xl font-bold tracking-tight mt-1">Assalamualaikum, {currentUser.username}!</h3>
+                      <p class="text-sm text-stone-200 mt-1 font-medium">Manajemen Aktifitas Harian Sekolah</p>
+                      
+                      <div class="flex items-center space-x-2 mt-4 pt-4 border-t border-emerald-800/60">
+                        <i class="fa-regular fa-calendar-check text-islamic-gold"></i>
+                        <span class="text-xs font-medium text-stone-200">{getHijriDate()}</span>
+                        <span class="text-xs text-emerald-300">|</span>
+                        <span class="text-xs font-medium text-stone-200">{new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Prayer times Section */}
+                  <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
+                    <div class="flex items-center justify-between mb-4">
+                      <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-clock text-emerald-600"></i>
+                        <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100">Jadwal Sholat Hari Ini</h4>
+                      </div>
+                      <a href="https://www.jadwalsholat.org" target="_blank" rel="noreferrer" class="inline-block p-1 bg-stone-50 dark:bg-stone-800 rounded-lg hover:scale-105 transition-transform">
+                        <img class="aligncenter" style={{ textAlign: 'center' }} alt="jadwal-sholat" src="https://www.jadwalsholat.org/wp-content/uploads/2013/09/jadwal-sholat.png" width="81" height="18" />
+                      </a>
+                    </div>
+
+                    {/* Styled Dynamic Prayer Times Layout */}
+                    <div class="grid grid-cols-5 gap-2 text-center">
+                      {[
+                        { name: 'Subuh', time: '04:36', icon: 'fa-cloud-sun' },
+                        { name: 'Dzuhur', time: '11:53', icon: 'fa-sun' },
+                        { name: 'Ashar', time: '15:14', icon: 'fa-cloud' },
+                        { name: 'Maghrib', time: '17:48', icon: 'fa-moon' },
+                        { name: 'Isya', time: '19:01', icon: 'fa-star-and-crescent' }
+                      ].map((sholat) => (
+                        <div key={sholat.name} class="bg-slate-50 dark:bg-stone-800/50 p-2.5 rounded-2xl flex flex-col items-center justify-center border border-stone-100/50 dark:border-stone-800/60">
+                          <i class={`fa-solid ${sholat.icon} text-emerald-600 mb-1 text-sm`}></i>
+                          <span class="text-[10px] font-bold text-stone-500 dark:text-stone-400 block">{sholat.name}</span>
+                          <span class="text-xs font-extrabold text-islamic-dark dark:text-stone-200 mt-1">{sholat.time}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Todo/Activities List Table Card */}
+                  <div class="bg-white dark:bg-stone-900 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 overflow-hidden">
+                    <div class="p-5 border-b border-stone-100 dark:border-stone-800 flex items-center justify-between">
+                      <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-list-check text-emerald-600"></i>
+                        <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100">Daftar Rencana Kerja Sekolah</h4>
+                      </div>
+                      {currentUser.role === 'admin' && (
+                        <button 
+                          onClick={() => handleDateClick(new Date().toISOString().split('T')[0])}
+                          class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-xl font-bold transition-all shadow-sm flex items-center"
+                        >
+                          <i class="fa-solid fa-plus mr-1"></i> Tambah Kerja
+                        </button>
+                      )}
+                    </div>
+
+                    <div class="overflow-x-auto no-scrollbar">
+                      <table class="w-full text-left border-collapse">
+                        <thead>
+                          <tr class="bg-stone-50 dark:bg-stone-800/40 text-[10px] font-extrabold tracking-wider uppercase text-stone-400">
+                            <th class="px-4 py-3">No</th>
+                            <th class="px-4 py-3">Aktifitas & Sub</th>
+                            <th class="px-4 py-3">Tgl Mulai</th>
+                            <th class="px-4 py-3">Tgl Selesai</th>
+                            <th class="px-4 py-3">Progress</th>
+                            <th class="px-4 py-3">PIC</th>
+                            <th class="px-4 py-3 text-center">Aksi</th>
+                          </tr>
+                        </thead>
+                        <tbody class="divide-y divide-stone-100 dark:divide-stone-800 text-xs">
+                          {todos.length === 0 ? (
+                            <tr>
+                              <td colSpan="7" class="text-center py-8 text-stone-400">Belum ada agenda rencana kerja terdaftar.</td>
+                            </tr>
+                          ) : (
+                            todos.map((todo, idx) => (
+                              <tr key={todo.id} class="hover:bg-stone-50/50 dark:hover:bg-stone-800/20">
+                                <td class="px-4 py-4 font-bold text-stone-400">{idx + 1}</td>
+                                <td class="px-4 py-4">
+                                  <div class="font-bold text-stone-800 dark:text-stone-100 text-sm">{todo.task}</div>
+                                  <div class="text-xs text-stone-400 mt-0.5">{todo.subActivity}</div>
+                                </td>
+                                <td class="px-4 py-4 text-stone-600 dark:text-stone-300 font-medium whitespace-nowrap">{todo.startDate}</td>
+                                <td class="px-4 py-4 text-stone-600 dark:text-stone-300 font-medium whitespace-nowrap">{todo.endDate}</td>
+                                <td class="px-4 py-4">
+                                  <div class="flex items-center space-x-2">
+                                    <div class="w-16 bg-stone-100 dark:bg-stone-800 rounded-full h-1.5 overflow-hidden">
+                                      <div class="bg-emerald-600 h-full rounded-full" style={{ width: `${todo.progress}%` }}></div>
+                                    </div>
+                                    <span class="font-bold text-[11px]">{todo.progress}%</span>
+                                  </div>
+                                </td>
+                                <td class="px-4 py-4 whitespace-nowrap"><span class="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-semibold px-2 py-1 rounded-md text-[10px]">{todo.pic}</span></td>
+                                <td class="px-4 py-4 text-center whitespace-nowrap">
+                                  {currentUser.role === 'admin' ? (
+                                    <div class="flex items-center justify-center space-x-1.5">
+                                      {todo.progress < 100 && (
+                                        <button 
+                                          onClick={() => handleMarkDone(todo)}
+                                          class="bg-emerald-500 hover:bg-emerald-600 text-white p-1.5 rounded-lg text-xs"
+                                          title="Setujui Selesai (100%)"
+                                        >
+                                          <i class="fa-solid fa-check"></i>
+                                        </button>
+                                      )}
+                                      <button 
+                                        onClick={() => handleEditClick(todo)}
+                                        class="bg-blue-500 hover:bg-blue-600 text-white p-1.5 rounded-lg text-xs"
+                                        title="Ubah Rencana"
+                                      >
+                                        <i class="fa-solid fa-edit"></i>
+                                      </button>
+                                      <button 
+                                        onClick={() => handleDeleteActivity(todo.id)}
+                                        class="bg-red-500 hover:bg-red-600 text-white p-1.5 rounded-lg text-xs"
+                                        title="Hapus Rencana"
+                                      >
+                                        <i class="fa-solid fa-trash"></i>
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <span class="text-stone-400 italic">Hanya Lihat</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 2: Kalender (Gregorian and Hijri Integrations) */}
+              {currentTab === 'calendar' && (
+                <div class="space-y-4">
+                  <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+                    {/* Embedded Hijri Calendar Widget (Referenced via Widget Embed) */}
+                    <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 md:col-span-5 flex flex-col items-center">
+                      <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100 mb-3 flex items-center">
+                        <i class="fa-solid fa-moon text-emerald-600 mr-2"></i> Kalender Hijriyah
+                      </h4>
+                      <div class="w-full flex items-center justify-center rounded-2xl overflow-hidden bg-slate-50 border border-stone-100">
+                        <iframe id="g2hFrame" title="islamic-calendar" style={{ width: '250px', height: '312px', border: 'none' }} scrolling="no" src="https://www.islamicfinder.org/islamic-calendar/widgetGregorian?type=Gregorian"></iframe>
+                      </div>
+                    </div>
+
+                    {/* Dynamic Interactive Work Plan Calendar Dashboard */}
+                    <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 md:col-span-7">
+                      <div class="flex items-center justify-between mb-4">
+                        <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100 flex items-center">
+                          <i class="fa-solid fa-calendar-days text-emerald-600 mr-2"></i> Klik Tanggal untuk Tambah Tugas
+                        </h4>
+                      </div>
+
+                      {/* Custom Interactive Month Grid */}
+                      <div class="grid grid-cols-7 gap-1 text-center font-bold text-[11px] mb-2 text-stone-400">
+                        <span>Min</span><span>Sen</span><span>Sel</span><span>Rab</span><span>Kam</span><span>Jum</span><span>Sab</span>
+                      </div>
+                      
+                      {/* Simple Dynamic Grid for current June 2026 */}
+                      <div class="grid grid-cols-7 gap-1">
+                        {Array.from({ length: 31 }, (_, i) => {
+                          const dateNum = i + 1;
+                          const dateStr = `2026-06-${dateNum.toString().padStart(2, '0')}`;
+                          const dayTasks = todos.filter(t => t.startDate <= dateStr && t.endDate >= dateStr);
+                          
+                          return (
+                            <button 
+                              key={dateNum}
+                              onClick={() => handleDateClick(dateStr)}
+                              class="aspect-square flex flex-col justify-between items-center p-1 bg-stone-50 hover:bg-emerald-50 dark:bg-stone-800/40 dark:hover:bg-stone-800 rounded-xl relative border border-stone-100 dark:border-stone-800 transition-all hover:scale-[1.05]"
+                            >
+                              <span class="text-xs font-bold self-start text-stone-600 dark:text-stone-300">{dateNum}</span>
+                              {dayTasks.length > 0 && (
+                                <span class="w-2 h-2 rounded-full bg-emerald-500 absolute bottom-1 right-1" title={`${dayTasks.length} Agenda aktif`}></span>
+                              )}
+                              {dayTasks.length > 0 && (
+                                <div class="text-[8px] font-medium text-emerald-600 dark:text-emerald-400 truncate max-w-full scale-90 mb-0.5">
+                                  {dayTasks.length} Rencana
+                                </div>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 3: Quran Portal (Referenced to quran.com API & Audio Qurancentral) */}
+              {currentTab === 'quran' && (
+                <div class="space-y-4">
+                  {/* Surah List Selection Panel */}
+                  {!selectedSurah ? (
+                    <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
+                      <div class="mb-4">
+                        <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100 flex items-center mb-2">
+                          <i class="fa-solid fa-book-open text-emerald-600 mr-2"></i> Portal Al-Quran & Terjemah
+                        </h4>
+                        <div class="relative">
+                          <input 
+                            type="text" 
+                            class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            placeholder="Cari surat (Contoh: Al-Fatihah, Ya-Sin)..."
+                            value={quranSearch}
+                            onChange={(e) => setQuranSearch(e.target.value)}
+                          />
+                          <i class="fa-solid fa-search text-stone-400 absolute left-3.5 top-3.5 text-xs"></i>
+                        </div>
+                      </div>
+
+                      {loadingQuran ? (
+                        <div class="text-center py-10">
+                          <i class="fa-solid fa-spinner animate-spin text-emerald-600 text-2xl"></i>
+                          <p class="text-xs text-stone-400 mt-2">Memuat data Al-Quran...</p>
+                        </div>
+                      ) : (
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto no-scrollbar">
+                          {quranSurahs
+                            .filter(surah => surah.englishName.toLowerCase().includes(quranSearch.toLowerCase()) || surah.name.includes(quranSearch))
+                            .map((surah) => (
+                              <button 
+                                key={surah.number}
+                                onClick={() => viewSurahDetails(surah.number)}
+                                class="p-3.5 rounded-2xl bg-stone-50/50 hover:bg-emerald-50/40 border border-stone-100 dark:bg-stone-800/25 dark:border-stone-800/40 text-left transition-all hover:scale-[1.01] flex items-center justify-between"
+                              >
+                                <div class="flex items-center space-x-3">
+                                  <span class="bg-emerald-600/10 text-emerald-600 font-bold w-7 h-7 flex items-center justify-center rounded-xl text-xs">{surah.number}</span>
+                                  <div>
+                                    <div class="font-bold text-xs">{surah.englishName}</div>
+                                    <div class="text-[10px] text-stone-400 uppercase tracking-widest">{surah.englishNameTranslation} ({surah.numberOfAyahs} Ayat)</div>
+                                  </div>
+                                </div>
+                                <div class="arabic-text text-lg text-emerald-700 font-bold">{surah.name}</div>
+                              </button>
+                            ))
+                          }
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    /* Surah Detail Ayah Viewer with Audio Recitation */
+                    <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
+                      <div class="flex items-center justify-between pb-3 border-b border-stone-100 dark:border-stone-800 mb-4">
+                        <button 
+                          onClick={() => { setSelectedSurah(null); setSurahDetails(null); }}
+                          class="text-xs text-emerald-600 font-bold flex items-center hover:underline"
+                        >
+                          <i class="fa-solid fa-arrow-left mr-1"></i> Kembali ke Daftar
+                        </button>
+                        {surahDetails && (
+                          <div class="text-right">
+                            <h4 class="font-bold text-xs">{surahDetails.info.englishName}</h4>
+                            <p class="text-[10px] text-stone-400">{surahDetails.info.englishNameTranslation}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {loadingQuran || !surahDetails ? (
+                        <div class="text-center py-10">
+                          <i class="fa-solid fa-spinner animate-spin text-emerald-600 text-2xl"></i>
+                          <p class="text-xs text-stone-400 mt-2">Memuat ayat...</p>
+                        </div>
+                      ) : (
+                        <div class="space-y-4 max-h-[500px] overflow-y-auto pr-2 no-scrollbar">
+                          {/* Bismillah Section */}
+                          {selectedSurah !== 1 && selectedSurah !== 9 && (
+                            <div class="text-center arabic-text text-xl py-4 text-emerald-800">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
+                          )}
+
+                          {surahDetails.verses.map((verse) => (
+                            <div key={verse.number} class="p-4 bg-stone-50 dark:bg-stone-800/40 rounded-2xl border border-stone-100/50 dark:border-stone-800/40 space-y-2">
+                              <div class="flex items-center justify-between">
+                                <span class="bg-emerald-600/10 text-emerald-600 font-bold text-[10px] w-6 h-6 flex items-center justify-center rounded-lg">{verse.number}</span>
+                                <button 
+                                  onClick={() => handlePlayAudio(verse.audio, verse.number)}
+                                  class={`text-xs p-2 rounded-xl transition-all ${playingAudio && playingAudio.id === verse.number ? 'bg-amber-500 text-white animate-pulse' : 'bg-emerald-600 text-white'}`}
+                                >
+                                  {playingAudio && playingAudio.id === verse.number ? <i class="fa-solid fa-pause"></i> : <i class="fa-solid fa-volume-high"></i>} Play Audio
+                                </button>
+                              </div>
+                              <div class="arabic-text text-right text-xl font-bold leading-loose text-slate-800 dark:text-stone-100 py-2">{verse.text}</div>
+                              <div class="text-stone-500 dark:text-stone-400 italic text-[11px] leading-relaxed mt-1 text-left">{verse.translation}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tab 4: Backend Settings Connection Configuration */}
+              {currentTab === 'settings' && (
+                <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
+                  <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100 flex items-center mb-4">
+                    <i class="fa-solid fa-database text-emerald-600 mr-2"></i> Pengaturan Backend Database
+                  </h4>
+
+                  <form onSubmit={saveSettings} class="space-y-4">
+                    <div class="bg-slate-50 dark:bg-stone-800/50 p-4 rounded-2xl border border-stone-100 dark:border-stone-800/60 text-xs leading-relaxed text-stone-500 dark:text-stone-400">
+                      <p class="font-bold text-stone-700 dark:text-stone-300 mb-1"><i class="fa-solid fa-circle-info text-emerald-600 mr-1"></i> Bagaimana cara menghubungkan ke Google Sheets?</p>
+                      <p>Gunakan Google Apps Script untuk membuat Web API Anda sendiri secara gratis. Salin link URL Web App yang dideploy dari Apps Script Anda, paste ke kolom di bawah ini, lalu klik tombol simpan.</p>
+                    </div>
+
+                    <div>
+                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">URL Google Apps Script Web App API</label>
+                      <input 
+                        type="url" 
+                        class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        placeholder="https://script.google.com/macros/s/.../exec"
+                        value={apiUrl}
+                        onChange={(e) => setApiUrl(e.target.value)}
+                      />
+                    </div>
+
+                    <div class="flex space-x-2">
+                      <button 
+                        type="submit" 
+                        class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs py-3 rounded-xl font-bold transition-all"
+                      >
+                        <i class="fa-solid fa-cloud-arrow-up mr-1"></i> Hubungkan Database
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => syncWithCloud()}
+                        disabled={syncing}
+                        class="bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 text-xs px-4 py-3 rounded-xl font-bold hover:bg-stone-200 transition-all disabled:opacity-50"
+                      >
+                        {syncing ? <i class="fa-solid fa-spinner animate-spin"></i> : <i class="fa-solid fa-rotate mr-1"></i>} Sinkronisasi
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+            </main>
+          )}
+
+          {/* Modal Form Rencana Kerja (Admins Only) */}
+          {isModalOpen && (
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <div class="w-full max-w-md bg-white dark:bg-stone-900 rounded-3xl shadow-2xl border border-stone-100 dark:border-stone-800 overflow-hidden p-6 relative">
+                <button 
+                  onClick={() => setIsModalOpen(false)}
+                  class="absolute top-4 right-4 text-stone-400 hover:text-stone-600"
+                >
+                  <i class="fa-solid fa-circle-xmark text-xl"></i>
+                </button>
+
+                <h3 class="text-base font-bold text-islamic-dark dark:text-stone-100 mb-4 flex items-center">
+                  <i class="fa-solid fa-calendar-plus text-emerald-600 mr-2"></i> {isEditing ? 'Ubah Rencana Kerja' : 'Tambah Rencana Kerja Baru'}
+                </h3>
+
+                <form onSubmit={handleSaveActivity} class="space-y-4 text-xs text-left">
+                  <div>
+                    <label class="block text-[10px] font-bold uppercase text-stone-400 mb-1">Uraian Rencana Kerja (Max 100 Kata)</label>
+                    <textarea 
+                      required
+                      maxLength="800"
+                      rows="3"
+                      class="w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      placeholder="Uraian detail tugas sekolah..."
+                      value={activityForm.task}
+                      onChange={(e) => setActivityForm({ ...activityForm, task: e.target.value })}
+                    />
+                  </div>
+
+                  <div>
+                    <label class="block text-[10px] font-bold uppercase text-stone-400 mb-1">Sub-Aktifitas</label>
+                    <input 
+                      type="text"
+                      required
+                      class="w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      placeholder="Sub kegiatan penunjang..."
+                      value={activityForm.subActivity}
+                      onChange={(e) => setActivityForm({ ...activityForm, subActivity: e.target.value })}
+                    />
+                  </div>
+
+                  <div>
+                    <label class="block text-[10px] font-bold uppercase text-stone-400 mb-1">Penanggung Jawab (PIC)</label>
+                    <input 
+                      type="text"
+                      required
+                      class="w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      placeholder="Nama User / Guru"
+                      value={activityForm.pic}
+                      onChange={(e) => setActivityForm({ ...activityForm, pic: e.target.value })}
+                    />
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-2">
+                    <div>
+                      <label class="block text-[10px] font-bold uppercase text-stone-400 mb-1">Tanggal Mulai</label>
+                      <input 
+                        type="date"
+                        required
+                        class="w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                        value={activityForm.startDate}
+                        onChange={(e) => setActivityForm({ ...activityForm, startDate: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label class="block text-[10px] font-bold uppercase text-stone-400 mb-1">Target Selesai</label>
+                      <input 
+                        type="date"
+                        required
+                        class="w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                        value={activityForm.endDate}
+                        onChange={(e) => setActivityForm({ ...activityForm, endDate: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div class="flex justify-between items-center mb-1">
+                      <label class="block text-[10px] font-bold uppercase text-stone-400">Progress Pencapaian (%): {activityForm.progress}%</label>
+                    </div>
+                    <input 
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="5"
+                      class="w-full accent-emerald-600 bg-stone-100 h-1.5 rounded-lg"
+                      value={activityForm.progress}
+                      onChange={(e) => setActivityForm({ ...activityForm, progress: Number(e.target.value) })}
+                    />
+                  </div>
+
+                  <button 
+                    type="submit" 
+                    class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-islamic-mint text-white font-bold transition-all"
+                  >
+                    <i class="fa-solid fa-save mr-1"></i> Simpan Agenda Kerja
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Premium Elegant Watermark Footer */}
+          <footer class="fixed bottom-0 left-0 right-0 py-2.5 bg-islamic-dark text-slate-300 text-center text-[10px] tracking-widest font-semibold border-t border-emerald-950/40 z-20 shadow-lg">
+            CREATED BY RAFLIANO
+          </footer>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
