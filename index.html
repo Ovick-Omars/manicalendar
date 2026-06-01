@@ -96,8 +96,7 @@
 
     function App() {
       // Configuration & Base States (URL set to default or saved)
-      const defaultGasUrl = 'https://script.google.com/macros/s/AKfycbzNtXTnRJtXzsLDOGTyRRi7_n2STbgJlFP8j7pe1QKHk56NxfMdf1rsgvkOUY1bFF8t/exec';
-      //https://script.google.com/macros/s/AKfycbzNtXTnRJtXzsLDOGTyRRi7_n2STbgJlFP8j7pe1QKHk56NxfMdf1rsgvkOUY1bFF8t/exec
+      const defaultGasUrl = 'https://script.google.com/macros/s/AKfycbxzqoeaYyHyGHGpYe4CZVeB1icxb1g1fHofLNbRsXNEblzYd9nSed2MiBARBiuPJfZq8g/exec';
       const [apiConnected, setApiConnected] = useState(false);
       const [apiUrl, setApiUrl] = useState(() => localStorage.getItem('gas_api_url') || defaultGasUrl);
       const [currentUser, setCurrentUser] = useState(() => {
@@ -802,17 +801,18 @@
 
       return (
         <div class="flex-grow flex flex-col">
-          {/* Header Bar with New Logo (PNGAAA 72355) and Updated Slogan */}
+          {/* Header Bar with High Contrast Logo wrapped in rounded White Box */}
           <header class="bg-islamic-dark text-white px-4 py-3 sticky top-0 z-30 shadow-md flex items-center justify-between">
-            <div class="flex items-center space-x-2">
-              <div class="bg-transparent p-1.5 rounded-xl flex items-center justify-center">
+            <div class="flex items-center space-x-2.5">
+              <div class="bg-white p-1 rounded-xl flex items-center justify-center shadow-sm w-10 h-10 overflow-hidden">
                 <img 
-                  src="https://www.pngaaa.com/detail/72355" 
+                  src="https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/Logo_Kementerian_Agama_Republik_Indonesia.png/120px-Logo_Kementerian_Agama_Republik_Indonesia.png" 
                   alt="Madrasah Logo" 
-                  class="h-9 w-9 object-contain"
+                  class="h-8 w-8 object-contain"
                   onError={(e) => {
-                    // Fallback source if site has external asset issues
-                    e.target.src = "https://images.pngaaa.com/355/72355-middle.png";
+                    // Fallback to a high-quality inline elegant academic icon in case of complete offline status
+                    e.target.style.display = 'none';
+                    e.target.parentNode.innerHTML = '<i class="fa-solid fa-graduation-cap text-emerald-600 text-xl"></i>';
                   }}
                 />
               </div>
