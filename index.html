@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>manicalendar - Manajemen Aktifitas Sekolah</title>
+  <title>manicalendar - Manajemen Aktifitas Madrasah</title>
   
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -64,7 +64,6 @@
     .arabic-text {
       font-family: 'Amiri', serif;
     }
-    /* Hide scrollbars but keep functionality */
     .no-scrollbar::-webkit-scrollbar {
       display: none;
     }
@@ -96,21 +95,27 @@
     const { useState, useEffect, useRef } = React;
 
     function App() {
-      // Configuration & Base States
+      // Configuration & Base States (URL set to default or saved)
+      const defaultGasUrl = 'https://script.google.com/macros/s/AKfycbxoK-i9mCshzX97X-2T4YV8h-bH4yV6hSHBgQ/exec';
       const [apiConnected, setApiConnected] = useState(false);
-      const [apiUrl, setApiUrl] = useState(() => localStorage.getItem('gas_api_url') || '');
+      const [apiUrl, setApiUrl] = useState(() => localStorage.getItem('gas_api_url') || defaultGasUrl);
       const [currentUser, setCurrentUser] = useState(() => {
         const saved = localStorage.getItem('active_user');
         return saved ? JSON.parse(saved) : null;
       });
-      const [currentTab, setCurrentTab] = useState('home'); // home | calendar | quran | settings
+      const [currentTab, setCurrentTab] = useState('home'); // home | calendar | quran | info | settings
       const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
       
       // Data States
       const [users, setUsers] = useState([]);
       const [todos, setTodos] = useState([]);
+      const [infos, setInfos] = useState([]);
       const [syncing, setSyncing] = useState(false);
       
+      // Pagination State for Todos (10 rows per page)
+      const [currentPage, setCurrentPage] = useState(1);
+      const rowsPerPage = 10;
+
       // Authentication States
       const [isRegisterMode, setIsRegisterMode] = useState(false);
       const [regForm, setRegForm] = useState({ username: '', email: '', password: '' });
@@ -133,6 +138,13 @@
       });
       const [isEditing, setIsEditing] = useState(false);
 
+      // Info Form Modal State
+      const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+      const [infoForm, setInfoForm] = useState({
+        title: '',
+        content: ''
+      });
+
       // Quran Component States
       const [quranSurahs, setQuranSurahs] = useState([]);
       const [selectedSurah, setSelectedSurah] = useState(null);
@@ -140,14 +152,21 @@
       const [loadingQuran, setLoadingQuran] = useState(false);
       const [playingAudio, setPlayingAudio] = useState(null); // { url, id }
       const [quranSearch, setQuranSearch] = useState('');
+      const [isPlayingFullSurah, setIsPlayingFullSurah] = useState(false);
+      const [currentFullSurahIndex, setCurrentFullSurahIndex] = useState(0);
       
       const audioRef = useRef(null);
 
-      // Static Backup/Demo Data (When API not configured)
+      // Static Backup/Demo Data (When API not configured or offline)
       const fallbackTodos = [
-        { id: '1', task: 'Ujian Tengah Semester', subActivity: 'Persiapan lembar soal & pengawas', pic: 'Ust. Ahmad', startDate: '2026-06-01', endDate: '2026-06-05', progress: 50, createdBy: 'admin' },
-        { id: '2', task: 'Rapat Kerja Tahunan', subActivity: 'Penyusunan anggaran belanja sekolah', pic: 'Bu Aminah', startDate: '2026-06-10', endDate: '2026-06-12', progress: 100, createdBy: 'admin' },
-        { id: '3', task: 'Penerimaan Santri Baru', subActivity: 'Seleksi berkas & wawancara', pic: 'Ust. Zulkifli', startDate: '2026-06-15', endDate: '2026-06-20', progress: 20, createdBy: 'admin' }
+        { id: '1', task: 'Ujian Tengah Semester Ganjil', subActivity: 'Persiapan lembar soal & pengawas madrasah', pic: 'Ust. Ahmad', startDate: '2026-06-01', endDate: '2026-06-05', progress: 50, createdBy: 'admin' },
+        { id: '2', task: 'Rapat Kerja Tahunan Madrasah', subActivity: 'Penyusunan anggaran belanja sekolah', pic: 'Bu Aminah', startDate: '2026-06-10', endDate: '2026-06-12', progress: 100, createdBy: 'admin' },
+        { id: '3', task: 'Penerimaan Santri Baru (PSB)', subActivity: 'Seleksi berkas & wawancara online', pic: 'Ust. Zulkifli', startDate: '2026-06-15', endDate: '2026-06-20', progress: 20, createdBy: 'admin' }
+      ];
+
+      const fallbackInfos = [
+        { id: '1', title: 'Persiapan Ujian Semester', content: 'Diharapkan seluruh asatidzah mempersiapkan naskah soal ujian paling lambat akhir minggu ini.', timestamp: '01-06-2026 09:15', createdBy: 'rafliano' },
+        { id: '2', title: 'Kebersihan Lingkungan Madrasah', content: 'Kerja bakti rutin hari Jumat akan difokuskan pada area halaman depan dan ruang kelas baru.', timestamp: '01-06-2026 10:30', createdBy: 'admin' }
       ];
 
       // Theme toggle handler
@@ -161,17 +180,36 @@
         localStorage.setItem('theme', theme);
       }, [theme]);
 
+      // Formatter function to format YYYY-MM-DD or ISO to dd-mm-yyyy
+      const formatDateStr = (dateStr) => {
+        if (!dateStr) return '';
+        try {
+          const d = new Date(dateStr);
+          if (isNaN(d.getTime())) {
+            // Check if string contains dash
+            if (dateStr.includes('-')) {
+              const parts = dateStr.split('-');
+              if (parts.length === 3 && parts[0].length === 4) {
+                return `${parts[2]}-${parts[1]}-${parts[0]}`;
+              }
+            }
+            return dateStr;
+          }
+          const day = String(d.getDate()).padStart(2, '0');
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const year = d.getFullYear();
+          return `${day}-${month}-${year}`;
+        } catch (e) {
+          return dateStr;
+        }
+      };
+
       // Handle Data Synchronization with Google Sheets API
       const syncWithCloud = async (urlToUse = apiUrl) => {
         if (!urlToUse) {
-          // If no API URL is set, load from localStorage or fallback
-          const localTodos = localStorage.getItem('local_todos');
-          if (localTodos) {
-            setTodos(JSON.parse(localTodos));
-          } else {
-            setTodos(fallbackTodos);
-            localStorage.setItem('local_todos', JSON.stringify(fallbackTodos));
-          }
+          // Fallbacks
+          setTodos(JSON.parse(localStorage.getItem('local_todos')) || fallbackTodos);
+          setInfos(JSON.parse(localStorage.getItem('local_infos')) || fallbackInfos);
           setApiConnected(false);
           return;
         }
@@ -188,10 +226,18 @@
           } else {
             throw new Error(todosData.message);
           }
+
+          // Fetch Infos
+          const infoRes = await fetch(`${urlToUse}?action=getInfos`);
+          const infoData = await infoRes.json();
+          if (infoData.status === 'success') {
+            setInfos(infoData.data);
+            localStorage.setItem('local_infos', JSON.stringify(infoData.data));
+          }
         } catch (error) {
           console.warn('Sync failed, using offline cache.', error);
-          const localTodos = localStorage.getItem('local_todos');
-          setTodos(localTodos ? JSON.parse(localTodos) : fallbackTodos);
+          setTodos(JSON.parse(localStorage.getItem('local_todos')) || fallbackTodos);
+          setInfos(JSON.parse(localStorage.getItem('local_infos')) || fallbackInfos);
           setApiConnected(false);
         } finally {
           setSyncing(false);
@@ -200,6 +246,10 @@
 
       // Periodic Auto-Sync and Initial Sync
       useEffect(() => {
+        if (apiUrl) {
+          // Ensure auto-sync on load if URL is set
+          localStorage.setItem('gas_api_url', apiUrl);
+        }
         syncWithCloud();
         loadQuranSurahs();
       }, [apiUrl]);
@@ -239,8 +289,8 @@
       // Load Surah Details with Indonesian translation
       const viewSurahDetails = async (surahNumber) => {
         setLoadingQuran(true);
+        setIsPlayingFullSurah(false);
         try {
-          // Fetch Arabic text
           const resAr = await fetch(`https://api.alquran.cloud/v1/surah/${surahNumber}/editions/quran-uthmani,id.indonesian,ar.alafasy`);
           const data = await resAr.json();
           if (data.code === 200) {
@@ -262,8 +312,9 @@
         }
       };
 
-      // Play Quranic audio recitation
+      // Play Quranic audio recitation per verse
       const handlePlayAudio = (audioUrl, verseId) => {
+        setIsPlayingFullSurah(false);
         if (playingAudio && playingAudio.id === verseId) {
           audioRef.current.pause();
           setPlayingAudio(null);
@@ -276,6 +327,43 @@
           setPlayingAudio({ url: audioUrl, id: verseId });
           audioRef.current.onended = () => setPlayingAudio(null);
         }
+      };
+
+      // Play continuous full surah audios sequentially
+      const handlePlayFullSurah = () => {
+        if (!surahDetails || surahDetails.verses.length === 0) return;
+        
+        if (isPlayingFullSurah) {
+          audioRef.current.pause();
+          setIsPlayingFullSurah(false);
+          setPlayingAudio(null);
+        } else {
+          setIsPlayingFullSurah(true);
+          playSurahVerse(0);
+        }
+      };
+
+      const playSurahVerse = (index) => {
+        if (index >= surahDetails.verses.length) {
+          setIsPlayingFullSurah(false);
+          setPlayingAudio(null);
+          return;
+        }
+        
+        const verse = surahDetails.verses[index];
+        setCurrentFullSurahIndex(index);
+        
+        if (audioRef.current) {
+          audioRef.current.pause();
+        }
+        
+        audioRef.current = new Audio(verse.audio);
+        audioRef.current.play();
+        setPlayingAudio({ url: verse.audio, id: verse.number });
+        
+        audioRef.current.onended = () => {
+          playSurahVerse(index + 1);
+        };
       };
 
       // Registration Handler
@@ -308,7 +396,10 @@
             });
             const data = await response.json();
             if (data.status === 'success') {
-              setAuthSuccess('Registrasi berhasil! Akun Anda sedang menunggu verifikasi admin.');
+              setAuthSuccess('Registrasi berhasil! Silakan masuk menggunakan kredensial Anda agar tersinkronisasi.');
+              
+              // Automatically switch to login screen so they can login freshly
+              setLoginForm({ username: usernameLower, password: regForm.password });
               setIsRegisterMode(false);
             } else {
               setAuthError(data.message || 'Registrasi gagal.');
@@ -319,7 +410,7 @@
             setSyncing(false);
           }
         } else {
-          // Offline local mode registration
+          // Offline mode registration
           const currentLocalUsers = JSON.parse(localStorage.getItem('local_users') || '[]');
           const exists = currentLocalUsers.some(u => u.username.toLowerCase() === usernameLower || u.email.toLowerCase() === emailLower);
           
@@ -332,13 +423,14 @@
             username: usernameLower,
             email: emailLower,
             password: regForm.password,
-            role: currentLocalUsers.length === 0 ? 'admin' : 'user' // First user becomes admin automatically
+            role: currentLocalUsers.length === 0 ? 'admin' : 'user'
           };
 
           const updatedUsers = [...currentLocalUsers, newUser];
           localStorage.setItem('local_users', JSON.stringify(updatedUsers));
           setUsers(updatedUsers);
-          setAuthSuccess(`Registrasi berhasil! Anda terdaftar sebagai ${newUser.role.toUpperCase()}`);
+          setAuthSuccess(`Registrasi berhasil! Masuk menggunakan akun Anda.`);
+          setLoginForm({ username: usernameLower, password: regForm.password });
           setIsRegisterMode(false);
         }
       };
@@ -358,7 +450,6 @@
         if (apiUrl) {
           setSyncing(true);
           try {
-            // Get users list to authenticate
             const res = await fetch(`${apiUrl}?action=getUsers`);
             const data = await res.json();
             if (data.status === 'success') {
@@ -377,14 +468,13 @@
                 localStorage.setItem('active_user', JSON.stringify(userSession));
                 syncWithCloud();
               } else {
-                setAuthError('Username atau password salah / Belum disetujui.');
+                setAuthError('Username atau password salah / Akun belum disetujui admin.');
               }
             } else {
               setAuthError('Error memverifikasi kredensial.');
             }
           } catch (err) {
             setAuthError('Backend Cloud tidak merespon. Mencoba login offline lokal...');
-            // Fallback to local authentication
             attemptLocalLogin(queryStr);
           } finally {
             setSyncing(false);
@@ -411,7 +501,7 @@
           localStorage.setItem('active_user', JSON.stringify(userSession));
           syncWithCloud();
         } else {
-          setAuthError('Username atau password salah (Koneksi Lokal).');
+          setAuthError('Username atau password salah.');
         }
       };
 
@@ -423,9 +513,10 @@
           audioRef.current.pause();
         }
         setPlayingAudio(null);
+        setIsPlayingFullSurah(false);
       };
 
-      // Create or Update Activity (Rencana Kerja)
+      // Save/Edit Activity
       const handleSaveActivity = async (e) => {
         e.preventDefault();
         if (currentUser.role !== 'admin') {
@@ -459,7 +550,7 @@
               setIsModalOpen(false);
               syncWithCloud();
             } else {
-              alert('Gagal menyimpan aktivitas ke spreadsheet: ' + data.message);
+              alert('Gagal menyimpan aktivitas: ' + data.message);
             }
           } catch (err) {
             alert('Koneksi Cloud gagal. Disimpan ke penyimpanan lokal.');
@@ -487,6 +578,66 @@
         setIsModalOpen(false);
       };
 
+      // Save Info Pengumuman
+      const handleSaveInfo = async (e) => {
+        e.preventDefault();
+        if (currentUser.role !== 'admin') {
+          alert('Hanya Administrator yang dapat menambahkan pengumuman informasi!');
+          return;
+        }
+
+        // Generate current timestamp on Indonesian format (dd-mm-yyyy HH:MM)
+        const now = new Date();
+        const dateStr = formatDateStr(now.toISOString().split('T')[0]);
+        const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        const timestamp = `${dateStr} ${timeStr}`;
+
+        const payload = {
+          action: 'saveInfo',
+          id: Date.now().toString(),
+          title: infoForm.title,
+          content: infoForm.content,
+          timestamp: timestamp,
+          createdBy: currentUser.username
+        };
+
+        if (apiUrl) {
+          setSyncing(true);
+          try {
+            const res = await fetch(apiUrl, {
+              method: 'POST',
+              mode: 'cors',
+              headers: { 'Content-Type': 'text/plain' },
+              body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (data.status === 'success') {
+              setIsInfoModalOpen(false);
+              setInfoForm({ title: '', content: '' });
+              syncWithCloud();
+            } else {
+              alert('Gagal menyimpan informasi: ' + data.message);
+            }
+          } catch (err) {
+            alert('Koneksi Cloud bermasalah. Disimpan secara lokal.');
+            saveInfoLocally(payload);
+          } finally {
+            setSyncing(false);
+          }
+        } else {
+          saveInfoLocally(payload);
+        }
+      };
+
+      const saveInfoLocally = (payload) => {
+        const localList = JSON.parse(localStorage.getItem('local_infos') || JSON.stringify(fallbackInfos));
+        const updatedList = [payload, ...localList];
+        setInfos(updatedList);
+        localStorage.setItem('local_infos', JSON.stringify(updatedList));
+        setIsInfoModalOpen(false);
+        setInfoForm({ title: '', content: '' });
+      };
+
       // Delete Activity
       const handleDeleteActivity = async (activityId) => {
         if (!confirm('Apakah Anda yakin ingin menghapus rencana kerja ini?')) return;
@@ -504,7 +655,7 @@
             if (data.status === 'success') {
               syncWithCloud();
             } else {
-              alert('Gagal menghapus dari Cloud Spreadsheet: ' + data.message);
+              alert('Gagal menghapus dari Spreadsheet: ' + data.message);
             }
           } catch (err) {
             deleteActivityLocally(activityId);
@@ -523,7 +674,43 @@
         localStorage.setItem('local_todos', JSON.stringify(updatedList));
       };
 
-      // Fast Progress to 100% (Done)
+      // Delete Info
+      const handleDeleteInfo = async (infoId) => {
+        if (!confirm('Apakah Anda yakin ingin menghapus informasi ini?')) return;
+
+        if (apiUrl) {
+          setSyncing(true);
+          try {
+            const res = await fetch(apiUrl, {
+              method: 'POST',
+              mode: 'cors',
+              headers: { 'Content-Type': 'text/plain' },
+              body: JSON.stringify({ action: 'deleteInfo', id: infoId })
+            });
+            const data = await res.json();
+            if (data.status === 'success') {
+              syncWithCloud();
+            } else {
+              alert('Gagal menghapus dari cloud: ' + data.message);
+            }
+          } catch (err) {
+            deleteInfoLocally(infoId);
+          } finally {
+            setSyncing(false);
+          }
+        } else {
+          deleteInfoLocally(infoId);
+        }
+      };
+
+      const deleteInfoLocally = (infoId) => {
+        const localList = JSON.parse(localStorage.getItem('local_infos') || '[]');
+        const updatedList = localList.filter(i => i.id.toString() !== infoId.toString());
+        setInfos(updatedList);
+        localStorage.setItem('local_infos', JSON.stringify(updatedList));
+      };
+
+      // Fast Progress to 100%
       const handleMarkDone = async (activity) => {
         if (currentUser.role !== 'admin') return;
         const updatedActivity = { ...activity, progress: 100 };
@@ -557,7 +744,7 @@
       // Open creation modal for a specific calendar date clicked
       const handleDateClick = (dateStr) => {
         if (currentUser.role !== 'admin') {
-          alert('Hanya Administrator yang dapat menambahkan jadwal rencana kerja.');
+          // Normal user cannot add activity
           return;
         }
         setSelectedDate(dateStr);
@@ -596,27 +783,41 @@
         e.preventDefault();
         localStorage.setItem('gas_api_url', apiUrl);
         syncWithCloud(apiUrl);
-        alert('Tautan Google Apps Script berhasil diperbarui!');
+        alert('Tautan Google Apps Script berhasil diperbarui & sinkronisasi ulang!');
       };
 
-      // Hijri Calendar Calculations Helpers (Approximations)
+      // Hijri Calendar calculations
       const getHijriDate = () => {
         const today = new Date();
         const options = { calendar: 'islamic-umalqura', day: 'numeric', month: 'long', year: 'numeric' };
         return new Intl.DateTimeFormat('id-ID-u-ca-islamic-umalqura', options).format(today);
       };
 
+      // Pagination helper variables
+      const idxOfLastRow = currentPage * rowsPerPage;
+      const idxOfFirstRow = idxOfLastRow - rowsPerPage;
+      const currentTodos = todos.slice(idxOfFirstRow, idxOfLastRow);
+      const totalPages = Math.ceil(todos.length / rowsPerPage);
+
       return (
         <div class="flex-grow flex flex-col">
-          {/* Header Bar */}
+          {/* Header Bar with New Logo (PNGAAA 72355) and Updated Slogan */}
           <header class="bg-islamic-dark text-white px-4 py-3 sticky top-0 z-30 shadow-md flex items-center justify-between">
             <div class="flex items-center space-x-2">
-              <div class="bg-islamic-gold text-islamic-dark p-2 rounded-xl flex items-center justify-center">
-                <i class="fa-solid fa-mosque text-lg"></i>
+              <div class="bg-transparent p-1.5 rounded-xl flex items-center justify-center">
+                <img 
+                  src="https://www.pngaaa.com/detail/72355" 
+                  alt="Madrasah Logo" 
+                  class="h-9 w-9 object-contain"
+                  onError={(e) => {
+                    // Fallback source if site has external asset issues
+                    e.target.src = "https://images.pngaaa.com/355/72355-middle.png";
+                  }}
+                />
               </div>
               <div>
                 <h1 class="text-lg font-bold tracking-tight">mani<span class="text-islamic-gold">calendar</span></h1>
-                <p class="text-xs text-stone-300 font-medium">Islamic Activity Planner</p>
+                <p class="text-[10px] text-stone-300 font-semibold tracking-wider">Madrasah Activity Planner</p>
               </div>
             </div>
 
@@ -656,7 +857,7 @@
                     <i class="fa-solid fa-calendar-check text-3xl"></i>
                   </div>
                   <h2 class="text-2xl font-extrabold text-islamic-dark dark:text-stone-100">Selamat Datang di ManiCalendar</h2>
-                  <p class="text-xs text-stone-500 dark:text-stone-400 mt-1">Platform Manajemen Aktivitas & Agenda Harian Sekolah Modern</p>
+                  <p class="text-xs text-stone-500 dark:text-stone-400 mt-1">Platform Manajemen Aktivitas & Agenda Harian Madrasah Modern</p>
                 </div>
 
                 {authError && (
@@ -764,10 +965,10 @@
               </div>
             </main>
           ) : (
-            /* Authenticated Application Panels */
+            /* Authenticated Application Panels with 5 Tabs */
             <main class="flex-grow max-w-4xl w-full mx-auto p-4 flex flex-col space-y-4">
               
-              {/* Tab navigation */}
+              {/* Tab navigation (5 Tabs Now: Beranda, Kalender, Quran, Informasi, Sistem) */}
               <div class="flex justify-around bg-white dark:bg-stone-900 p-1.5 rounded-2xl shadow-sm border border-stone-100 dark:border-stone-800">
                 <button 
                   onClick={() => setCurrentTab('home')}
@@ -788,6 +989,12 @@
                   <i class="fa-solid fa-book-quran text-base block mb-1 text-center"></i> Quran
                 </button>
                 <button 
+                  onClick={() => setCurrentTab('info')}
+                  class={`flex-1 py-3 text-xs font-bold rounded-xl transition-all ${currentTab === 'info' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
+                >
+                  <i class="fa-solid fa-circle-info text-base block mb-1 text-center"></i> Informasi
+                </button>
+                <button 
                   onClick={() => setCurrentTab('settings')}
                   class={`flex-1 py-3 text-xs font-bold rounded-xl transition-all ${currentTab === 'settings' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
                 >
@@ -798,21 +1005,21 @@
               {/* Tab 1: Home Dashboard */}
               {currentTab === 'home' && (
                 <div class="space-y-4">
-                  {/* Assalamualaikum Greeting Card */}
+                  {/* Greeting Card: Updated Teks & Tanggal format */}
                   <div class="sholat-card text-white p-6 rounded-3xl relative overflow-hidden shadow-xl">
                     <div class="absolute right-[-20px] top-[-20px] opacity-10">
                       <i class="fa-solid fa-mosque text-9xl"></i>
                     </div>
                     <div class="relative z-10">
-                      <span class="text-[10px] uppercase font-bold tracking-widest text-emerald-300">Selamat Datang</span>
+                      <span class="text-[10px] uppercase font-bold tracking-widest text-emerald-300">Ahlan Wa Sahlan Bp/Ibu</span>
                       <h3 class="text-2xl font-bold tracking-tight mt-1">Assalamualaikum, {currentUser.username}!</h3>
-                      <p class="text-sm text-stone-200 mt-1 font-medium">Manajemen Aktifitas Harian Sekolah</p>
+                      <p class="text-sm text-stone-200 mt-1 font-medium">Manajemen Aktifitas Madrasah</p>
                       
                       <div class="flex items-center space-x-2 mt-4 pt-4 border-t border-emerald-800/60">
                         <i class="fa-regular fa-calendar-check text-islamic-gold"></i>
                         <span class="text-xs font-medium text-stone-200">{getHijriDate()}</span>
                         <span class="text-xs text-emerald-300">|</span>
-                        <span class="text-xs font-medium text-stone-200">{new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                        <span class="text-xs font-semibold text-stone-200">{formatDateStr(new Date().toISOString().split('T')[0])}</span>
                       </div>
                     </div>
                   </div>
@@ -829,7 +1036,7 @@
                       </a>
                     </div>
 
-                    {/* Styled Dynamic Prayer Times Layout */}
+                    {/* Dynamic Prayer Times Layout */}
                     <div class="grid grid-cols-5 gap-2 text-center">
                       {[
                         { name: 'Subuh', time: '04:36', icon: 'fa-cloud-sun' },
@@ -847,19 +1054,19 @@
                     </div>
                   </div>
 
-                  {/* Todo/Activities List Table Card */}
+                  {/* Todo/Activities List Table Card with Pagination */}
                   <div class="bg-white dark:bg-stone-900 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 overflow-hidden">
                     <div class="p-5 border-b border-stone-100 dark:border-stone-800 flex items-center justify-between">
                       <div class="flex items-center space-x-2">
                         <i class="fa-solid fa-list-check text-emerald-600"></i>
-                        <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100">Daftar Rencana Kerja Sekolah</h4>
+                        <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100">Daftar Rencana Kerja Sekolah Madrasah</h4>
                       </div>
                       {currentUser.role === 'admin' && (
                         <button 
                           onClick={() => handleDateClick(new Date().toISOString().split('T')[0])}
                           class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-xl font-bold transition-all shadow-sm flex items-center"
                         >
-                          <i class="fa-solid fa-plus mr-1"></i> Tambah Kerja
+                          <i class="fa-solid fa-plus mr-1"></i> Tambah Aktifitas
                         </button>
                       )}
                     </div>
@@ -878,20 +1085,20 @@
                           </tr>
                         </thead>
                         <tbody class="divide-y divide-stone-100 dark:divide-stone-800 text-xs">
-                          {todos.length === 0 ? (
+                          {currentTodos.length === 0 ? (
                             <tr>
                               <td colSpan="7" class="text-center py-8 text-stone-400">Belum ada agenda rencana kerja terdaftar.</td>
                             </tr>
                           ) : (
-                            todos.map((todo, idx) => (
+                            currentTodos.map((todo, idx) => (
                               <tr key={todo.id} class="hover:bg-stone-50/50 dark:hover:bg-stone-800/20">
-                                <td class="px-4 py-4 font-bold text-stone-400">{idx + 1}</td>
+                                <td class="px-4 py-4 font-bold text-stone-400">{idxOfFirstRow + idx + 1}</td>
                                 <td class="px-4 py-4">
                                   <div class="font-bold text-stone-800 dark:text-stone-100 text-sm">{todo.task}</div>
                                   <div class="text-xs text-stone-400 mt-0.5">{todo.subActivity}</div>
                                 </td>
-                                <td class="px-4 py-4 text-stone-600 dark:text-stone-300 font-medium whitespace-nowrap">{todo.startDate}</td>
-                                <td class="px-4 py-4 text-stone-600 dark:text-stone-300 font-medium whitespace-nowrap">{todo.endDate}</td>
+                                <td class="px-4 py-4 text-stone-600 dark:text-stone-300 font-medium whitespace-nowrap">{formatDateStr(todo.startDate)}</td>
+                                <td class="px-4 py-4 text-stone-600 dark:text-stone-300 font-medium whitespace-nowrap">{formatDateStr(todo.endDate)}</td>
                                 <td class="px-4 py-4">
                                   <div class="flex items-center space-x-2">
                                     <div class="w-16 bg-stone-100 dark:bg-stone-800 rounded-full h-1.5 overflow-hidden">
@@ -938,72 +1145,96 @@
                         </tbody>
                       </table>
                     </div>
+
+                    {/* Pagination Controls - 10 Rows Max */}
+                    {totalPages > 1 && (
+                      <div class="p-4 bg-slate-50 dark:bg-stone-900 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between">
+                        <button
+                          disabled={currentPage === 1}
+                          onClick={() => setCurrentPage(currentPage - 1)}
+                          class="px-3 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-stone-800 border dark:border-stone-700 disabled:opacity-50 hover:bg-stone-100"
+                        >
+                          Sebelumnya
+                        </button>
+                        <span class="text-xs font-semibold text-stone-500">Halaman {currentPage} dari {totalPages}</span>
+                        <button
+                          disabled={currentPage === totalPages}
+                          onClick={() => setCurrentPage(currentPage + 1)}
+                          class="px-3 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-stone-800 border dark:border-stone-700 disabled:opacity-50 hover:bg-stone-100"
+                        >
+                          Selanjutnya
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
 
-              {/* Tab 2: Kalender (Gregorian and Hijri Integrations) */}
+              {/* Tab 2: Kalender (Conditional for Admin and Normal User) */}
               {currentTab === 'calendar' && (
                 <div class="space-y-4">
-                  <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
-                    {/* Embedded Hijri Calendar Widget (Referenced via Widget Embed) */}
-                    <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 md:col-span-5 flex flex-col items-center">
-                      <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100 mb-3 flex items-center">
-                        <i class="fa-solid fa-moon text-emerald-600 mr-2"></i> Kalender Hijriyah
-                      </h4>
-                      <div class="w-full flex items-center justify-center rounded-2xl overflow-hidden bg-slate-50 border border-stone-100">
-                        <iframe id="g2hFrame" title="islamic-calendar" style={{ width: '250px', height: '312px', border: 'none' }} scrolling="no" src="https://www.islamicfinder.org/islamic-calendar/widgetGregorian?type=Gregorian"></iframe>
-                      </div>
-                    </div>
-
-                    {/* Dynamic Interactive Work Plan Calendar Dashboard */}
-                    <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 md:col-span-7">
-                      <div class="flex items-center justify-between mb-4">
-                        <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100 flex items-center">
-                          <i class="fa-solid fa-calendar-days text-emerald-600 mr-2"></i> Klik Tanggal untuk Tambah Tugas
+                  {currentUser.role === 'admin' ? (
+                    /* Admin: Shows Gregorian Planner calendar + Hijri widget side-by-side */
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+                      <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 md:col-span-5 flex flex-col items-center">
+                        <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100 mb-3 flex items-center">
+                          <i class="fa-solid fa-moon text-emerald-600 mr-2"></i> Kalender Hijriyah
                         </h4>
+                        <div class="w-full flex items-center justify-center rounded-2xl overflow-hidden bg-slate-50 border border-stone-100">
+                          <iframe id="g2hFrame" title="islamic-calendar" style={{ width: '250px', height: '312px', border: 'none' }} scrolling="no" src="https://www.islamicfinder.org/islamic-calendar/widgetGregorian?type=Gregorian"></iframe>
+                        </div>
                       </div>
 
-                      {/* Custom Interactive Month Grid */}
-                      <div class="grid grid-cols-7 gap-1 text-center font-bold text-[11px] mb-2 text-stone-400">
-                        <span>Min</span><span>Sen</span><span>Sel</span><span>Rab</span><span>Kam</span><span>Jum</span><span>Sab</span>
-                      </div>
-                      
-                      {/* Simple Dynamic Grid for current June 2026 */}
-                      <div class="grid grid-cols-7 gap-1">
-                        {Array.from({ length: 31 }, (_, i) => {
-                          const dateNum = i + 1;
-                          const dateStr = `2026-06-${dateNum.toString().padStart(2, '0')}`;
-                          const dayTasks = todos.filter(t => t.startDate <= dateStr && t.endDate >= dateStr);
-                          
-                          return (
-                            <button 
-                              key={dateNum}
-                              onClick={() => handleDateClick(dateStr)}
-                              class="aspect-square flex flex-col justify-between items-center p-1 bg-stone-50 hover:bg-emerald-50 dark:bg-stone-800/40 dark:hover:bg-stone-800 rounded-xl relative border border-stone-100 dark:border-stone-800 transition-all hover:scale-[1.05]"
-                            >
-                              <span class="text-xs font-bold self-start text-stone-600 dark:text-stone-300">{dateNum}</span>
-                              {dayTasks.length > 0 && (
-                                <span class="w-2 h-2 rounded-full bg-emerald-500 absolute bottom-1 right-1" title={`${dayTasks.length} Agenda aktif`}></span>
-                              )}
-                              {dayTasks.length > 0 && (
-                                <div class="text-[8px] font-medium text-emerald-600 dark:text-emerald-400 truncate max-w-full scale-90 mb-0.5">
-                                  {dayTasks.length} Rencana
-                                </div>
-                              )}
-                            </button>
-                          );
-                        })}
+                      <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 md:col-span-7">
+                        <div class="flex items-center justify-between mb-4">
+                          <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100 flex items-center">
+                            <i class="fa-solid fa-calendar-days text-emerald-600 mr-2"></i> Klik Tanggal untuk Tambah Tugas
+                          </h4>
+                        </div>
+
+                        <div class="grid grid-cols-7 gap-1 text-center font-bold text-[11px] mb-2 text-stone-400">
+                          <span>Min</span><span>Sen</span><span>Sel</span><span>Rab</span><span>Kam</span><span>Jum</span><span>Sab</span>
+                        </div>
+                        
+                        <div class="grid grid-cols-7 gap-1">
+                          {Array.from({ length: 31 }, (_, i) => {
+                            const dateNum = i + 1;
+                            const dateStr = `2026-06-${dateNum.toString().padStart(2, '0')}`;
+                            const dayTasks = todos.filter(t => t.startDate <= dateStr && t.endDate >= dateStr);
+                            
+                            return (
+                              <button 
+                                key={dateNum}
+                                onClick={() => handleDateClick(dateStr)}
+                                class="aspect-square flex flex-col justify-between items-center p-1 bg-stone-50 hover:bg-emerald-50 dark:bg-stone-800/40 dark:hover:bg-stone-800 rounded-xl relative border border-stone-100 dark:border-stone-800 transition-all hover:scale-[1.05]"
+                              >
+                                <span class="text-xs font-bold self-start text-stone-600 dark:text-stone-300">{dateNum}</span>
+                                {dayTasks.length > 0 && (
+                                  <span class="w-2 h-2 rounded-full bg-emerald-500 absolute bottom-1 right-1" title={`${dayTasks.length} Agenda aktif`}></span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  ) : (
+                    /* Regular User: ONLY displays elegant Hijri calendar widget as requested */
+                    <div class="bg-white dark:bg-stone-900 p-8 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 flex flex-col items-center justify-center max-w-md mx-auto">
+                      <h4 class="font-bold text-base text-islamic-dark dark:text-stone-100 mb-4 flex items-center">
+                        <i class="fa-solid fa-moon text-emerald-600 mr-2 animate-pulse"></i> Kalender Hijriyah Hari Ini
+                      </h4>
+                      <div class="w-full flex items-center justify-center rounded-2xl overflow-hidden bg-slate-50 dark:bg-stone-800 border border-stone-100 dark:border-stone-800 p-4">
+                        <iframe id="g2hFrameUser" title="islamic-calendar-user" style={{ width: '250px', height: '312px', border: 'none' }} scrolling="no" src="https://www.islamicfinder.org/islamic-calendar/widgetGregorian?type=Gregorian"></iframe>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Tab 3: Quran Portal (Referenced to quran.com API & Audio Qurancentral) */}
+              {/* Tab 3: Quran Portal (with single Ayah and FULL Surah audio player) */}
               {currentTab === 'quran' && (
                 <div class="space-y-4">
-                  {/* Surah List Selection Panel */}
                   {!selectedSurah ? (
                     <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
                       <div class="mb-4">
@@ -1052,21 +1283,31 @@
                       )}
                     </div>
                   ) : (
-                    /* Surah Detail Ayah Viewer with Audio Recitation */
+                    /* Surah Detail Ayah Viewer with FULL SURAH AUDIO PLAYER added */
                     <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
-                      <div class="flex items-center justify-between pb-3 border-b border-stone-100 dark:border-stone-800 mb-4">
+                      <div class="flex items-center justify-between pb-3 border-b border-stone-100 dark:border-stone-800 mb-4 flex-wrap gap-2">
                         <button 
-                          onClick={() => { setSelectedSurah(null); setSurahDetails(null); }}
+                          onClick={() => { setSelectedSurah(null); setSurahDetails(null); setIsPlayingFullSurah(false); if (audioRef.current) audioRef.current.pause(); }}
                           class="text-xs text-emerald-600 font-bold flex items-center hover:underline"
                         >
                           <i class="fa-solid fa-arrow-left mr-1"></i> Kembali ke Daftar
                         </button>
-                        {surahDetails && (
-                          <div class="text-right">
-                            <h4 class="font-bold text-xs">{surahDetails.info.englishName}</h4>
-                            <p class="text-[10px] text-stone-400">{surahDetails.info.englishNameTranslation}</p>
-                          </div>
-                        )}
+
+                        <div class="flex items-center space-x-2">
+                          <button
+                            onClick={handlePlayFullSurah}
+                            class={`text-xs px-3 py-1.5 rounded-xl font-bold transition-all shadow-sm flex items-center ${isPlayingFullSurah ? 'bg-amber-500 text-white animate-pulse' : 'bg-emerald-700 text-white hover:bg-emerald-800'}`}
+                          >
+                            <i class={`fa-solid ${isPlayingFullSurah ? 'fa-pause' : 'fa-play-circle'} mr-1.5 text-sm`}></i>
+                            {isPlayingFullSurah ? 'Pause Full Surat' : 'Putar Full Surat'}
+                          </button>
+                          {surahDetails && (
+                            <div class="text-right">
+                              <h4 class="font-bold text-xs">{surahDetails.info.englishName}</h4>
+                              <p class="text-[10px] text-stone-400">{surahDetails.info.numberOfAyahs} Ayat</p>
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                       {loadingQuran || !surahDetails ? (
@@ -1076,20 +1317,22 @@
                         </div>
                       ) : (
                         <div class="space-y-4 max-h-[500px] overflow-y-auto pr-2 no-scrollbar">
-                          {/* Bismillah Section */}
                           {selectedSurah !== 1 && selectedSurah !== 9 && (
                             <div class="text-center arabic-text text-xl py-4 text-emerald-800">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
                           )}
 
-                          {surahDetails.verses.map((verse) => (
-                            <div key={verse.number} class="p-4 bg-stone-50 dark:bg-stone-800/40 rounded-2xl border border-stone-100/50 dark:border-stone-800/40 space-y-2">
+                          {surahDetails.verses.map((verse, vIdx) => (
+                            <div 
+                              key={verse.number} 
+                              class={`p-4 rounded-2xl border transition-all ${isPlayingFullSurah && currentFullSurahIndex === vIdx ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-500/35' : 'bg-stone-50 dark:bg-stone-800/40 border-stone-100/50 dark:border-stone-800/40'}`}
+                            >
                               <div class="flex items-center justify-between">
                                 <span class="bg-emerald-600/10 text-emerald-600 font-bold text-[10px] w-6 h-6 flex items-center justify-center rounded-lg">{verse.number}</span>
                                 <button 
                                   onClick={() => handlePlayAudio(verse.audio, verse.number)}
-                                  class={`text-xs p-2 rounded-xl transition-all ${playingAudio && playingAudio.id === verse.number ? 'bg-amber-500 text-white animate-pulse' : 'bg-emerald-600 text-white'}`}
+                                  class={`text-xs p-2 rounded-xl transition-all ${playingAudio && playingAudio.id === verse.number && !isPlayingFullSurah ? 'bg-amber-500 text-white' : 'bg-emerald-600 text-white'}`}
                                 >
-                                  {playingAudio && playingAudio.id === verse.number ? <i class="fa-solid fa-pause"></i> : <i class="fa-solid fa-volume-high"></i>} Play Audio
+                                  {playingAudio && playingAudio.id === verse.number && !isPlayingFullSurah ? <i class="fa-solid fa-pause"></i> : <i class="fa-solid fa-volume-high"></i>} Play Audio
                                 </button>
                               </div>
                               <div class="arabic-text text-right text-xl font-bold leading-loose text-slate-800 dark:text-stone-100 py-2">{verse.text}</div>
@@ -1103,7 +1346,59 @@
                 </div>
               )}
 
-              {/* Tab 4: Backend Settings Connection Configuration */}
+              {/* Tab 4: Informasi (NEW TAB) */}
+              {currentTab === 'info' && (
+                <div class="space-y-4">
+                  <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
+                    <div class="flex items-center justify-between mb-4 pb-3 border-b border-stone-100 dark:border-stone-800">
+                      <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-bullhorn text-emerald-600"></i>
+                        <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100">Pusat Informasi & Pengumuman Madrasah</h4>
+                      </div>
+                      {currentUser.role === 'admin' && (
+                        <button 
+                          onClick={() => setIsInfoModalOpen(true)}
+                          class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-xl font-bold transition-all shadow-sm"
+                        >
+                          <i class="fa-solid fa-plus mr-1"></i> Buat Informasi
+                        </button>
+                      )}
+                    </div>
+
+                    <div class="space-y-3 max-h-[500px] overflow-y-auto pr-2 no-scrollbar">
+                      {infos.length === 0 ? (
+                        <div class="text-center py-10 text-stone-400 text-xs">Belum ada pengumuman atau informasi resmi saat ini.</div>
+                      ) : (
+                        infos.map((info) => (
+                          <div key={info.id} class="p-4 bg-stone-50/50 dark:bg-stone-850 rounded-2xl border border-stone-100 dark:border-stone-800 flex justify-between items-start space-x-4">
+                            <div class="space-y-1.5 flex-1">
+                              <h5 class="font-bold text-xs text-stone-800 dark:text-stone-100 uppercase tracking-wide">{info.title}</h5>
+                              <p class="text-xs text-stone-600 dark:text-stone-400 leading-relaxed whitespace-pre-wrap">{info.content}</p>
+                              <div class="flex items-center space-x-2 pt-2 text-[10px] text-stone-400 font-medium">
+                                <span><i class="fa-solid fa-clock mr-1"></i> {info.timestamp}</span>
+                                <span>•</span>
+                                <span><i class="fa-solid fa-user mr-1"></i> Oleh: {info.createdBy}</span>
+                              </div>
+                            </div>
+
+                            {currentUser.role === 'admin' && (
+                              <button
+                                onClick={() => handleDeleteInfo(info.id)}
+                                class="text-rose-600 hover:text-rose-800 p-1 rounded-lg"
+                                title="Hapus Pengumuman"
+                              >
+                                <i class="fa-solid fa-trash"></i>
+                              </button>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 5: Backend Settings Configuration */}
               {currentTab === 'settings' && (
                 <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
                   <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100 flex items-center mb-4">
@@ -1132,7 +1427,7 @@
                         type="submit" 
                         class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs py-3 rounded-xl font-bold transition-all"
                       >
-                        <i class="fa-solid fa-cloud-arrow-up mr-1"></i> Hubungkan Database
+                        <i class="fa-solid fa-cloud-arrow-up mr-1"></i> Simpan URL & Update
                       </button>
                       <button 
                         type="button"
@@ -1246,6 +1541,65 @@
                     class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-islamic-mint text-white font-bold transition-all"
                   >
                     <i class="fa-solid fa-save mr-1"></i> Simpan Agenda Kerja
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Modal Form Informasi Pengumuman (Admins Only) */}
+          {isInfoModalOpen && (
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <div class="w-full max-w-md bg-white dark:bg-stone-900 rounded-3xl shadow-2xl border border-stone-100 dark:border-stone-800 overflow-hidden p-6 relative">
+                <button 
+                  onClick={() => { setIsInfoModalOpen(false); setInfoForm({ title: '', content: '' }); }}
+                  class="absolute top-4 right-4 text-stone-400 hover:text-stone-600"
+                >
+                  <i class="fa-solid fa-circle-xmark text-xl"></i>
+                </button>
+
+                <h3 class="text-base font-bold text-islamic-dark dark:text-stone-100 mb-4 flex items-center">
+                  <i class="fa-solid fa-bullhorn text-emerald-600 mr-2"></i> Tambah Informasi Baru
+                </h3>
+
+                <form onSubmit={handleSaveInfo} class="space-y-4 text-xs text-left">
+                  <div>
+                    <label class="block text-[10px] font-bold uppercase text-stone-400 mb-1">Kotak Judul (Max 50 Karakter)</label>
+                    <input 
+                      type="text"
+                      required
+                      maxLength="50"
+                      class="w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      placeholder="Contoh: Pengumuman Rapat Wali Murid"
+                      value={infoForm.title}
+                      onChange={(e) => setInfoForm({ ...infoForm, title: e.target.value })}
+                    />
+                    <span class="text-[9px] text-stone-400 block mt-0.5 text-right">{infoForm.title.length}/50 karakter</span>
+                  </div>
+
+                  <div>
+                    <label class="block text-[10px] font-bold uppercase text-stone-400 mb-1">Kotak Informasi (Max 500 Karakter)</label>
+                    <textarea 
+                      required
+                      maxLength="500"
+                      rows="5"
+                      class="w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      placeholder="Isi informasi lengkap di sini..."
+                      value={infoForm.content}
+                      onChange={(e) => setInfoForm({ ...infoForm, content: e.target.value })}
+                    />
+                    <span class="text-[9px] text-stone-400 block mt-0.5 text-right">{infoForm.content.length}/500 karakter</span>
+                  </div>
+
+                  <div class="bg-slate-50 dark:bg-stone-800 p-3 rounded-xl border border-stone-100 dark:border-stone-700 text-[10px] text-stone-500">
+                    <i class="fa-solid fa-clock mr-1"></i> Tanggal & Jam Sistem Saat Ini: <span class="font-bold">{formatDateStr(new Date().toISOString().split('T')[0])} {String(new Date().getHours()).padStart(2, '0')}:{String(new Date().getMinutes()).padStart(2, '0')}</span>
+                  </div>
+
+                  <button 
+                    type="submit" 
+                    class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-islamic-mint text-white font-bold transition-all"
+                  >
+                    <i class="fa-solid fa-paper-plane mr-1"></i> Publikasikan Informasi
                   </button>
                 </form>
               </div>
