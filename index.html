@@ -189,12 +189,27 @@
       const formatDateStr = (dateStr) => {
         if (!dateStr) return '';
         try {
+          // Jika terdapat format waktu ISO (mengandung 'T' dan 'Z')
+          if (dateStr.includes('T')) {
+            const rawYmd = dateStr.split('T')[0];
+            const parts = rawYmd.split('-');
+            if (parts.length === 3) {
+              return `${parts[2]}-${parts[1]}-${parts[0]}`;
+            }
+          }
           const d = new Date(dateStr);
           if (isNaN(d.getTime())) {
             if (dateStr.includes('-')) {
               const parts = dateStr.split('-');
-              if (parts.length === 3 && parts[0].length === 4) {
-                return `${parts[2]}-${parts[1]}-${parts[0]}`;
+              if (parts.length === 3) {
+                // Jika formatnya sudah YYYY-MM-DD
+                if (parts[0].length === 4) {
+                  return `${parts[2]}-${parts[1]}-${parts[0]}`;
+                }
+                // Jika formatnya sudah DD-MM-YYYY
+                if (parts[2].length === 4) {
+                  return `${parts[0]}-${parts[1]}-${parts[2]}`;
+                }
               }
             }
             return dateStr;
@@ -203,6 +218,40 @@
           const month = String(d.getMonth() + 1).padStart(2, '0');
           const year = d.getFullYear();
           return `${day}-${month}-${year}`;
+        } catch (e) {
+          return dateStr;
+        }
+      };
+
+      // Helper function to safely format any date format to exact YYYY-MM-DD for HTML input
+      const formatToInputDate = (dateStr) => {
+        if (!dateStr) return '';
+        try {
+          // Deteksi format ISO
+          if (dateStr.includes('T')) {
+            return dateStr.split('T')[0];
+          }
+          // Deteksi format DD-MM-YYYY
+          if (dateStr.includes('-')) {
+            const parts = dateStr.split('-');
+            if (parts.length === 3) {
+              if (parts[2].length === 4) {
+                return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+              }
+              if (parts[0].length === 4) {
+                return dateStr;
+              }
+            }
+          }
+          // Fallback umum dengan objek Date
+          const d = new Date(dateStr);
+          if (!isNaN(d.getTime())) {
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+          }
+          return dateStr;
         } catch (e) {
           return dateStr;
         }
@@ -535,8 +584,8 @@
           task: activityForm.task,
           subActivity: activityForm.subActivity,
           pic: activityForm.pic,
-          startDate: activityForm.startDate || new Date().toISOString().split('T')[0],
-          endDate: activityForm.endDate,
+          startDate: formatToInputDate(activityForm.startDate) || new Date().toISOString().split('T')[0],
+          endDate: formatToInputDate(activityForm.endDate),
           progress: Number(activityForm.progress),
           keterangan: activityForm.keterangan || '',
           createdBy: currentUser.username
@@ -718,7 +767,12 @@
       // Fast Progress to 100%
       const handleMarkDone = async (activity) => {
         if (currentUser.role !== 'admin') return;
-        const updatedActivity = { ...activity, progress: 100 };
+        const updatedActivity = { 
+          ...activity, 
+          startDate: formatToInputDate(activity.startDate),
+          endDate: formatToInputDate(activity.endDate),
+          progress: 100 
+        };
         
         if (apiUrl && apiUrl !== defaultGasUrl) {
           setSyncing(true);
@@ -758,8 +812,8 @@
           task: '',
           subActivity: '',
           pic: '',
-          startDate: dateStr,
-          endDate: dateStr,
+          startDate: formatToInputDate(dateStr),
+          endDate: formatToInputDate(dateStr),
           progress: 0,
           keterangan: '',
           createdBy: currentUser.username
@@ -768,15 +822,15 @@
         setIsModalOpen(true);
       };
 
-      // Open edit form
+      // Open edit form - with safety format to avoid empty date input field (dd/mm/yyyy issue)
       const handleEditClick = (activity) => {
         setActivityForm({
           id: activity.id,
           task: activity.task,
           subActivity: activity.subActivity,
           pic: activity.pic,
-          startDate: activity.startDate,
-          endDate: activity.endDate,
+          startDate: formatToInputDate(activity.startDate),
+          endDate: formatToInputDate(activity.endDate),
           progress: activity.progress,
           keterangan: activity.keterangan || '',
           createdBy: activity.createdBy
@@ -785,14 +839,25 @@
         setIsModalOpen(true);
       };
 
-      // Save Keterangan (Admin Only)
+      // Save Keterangan (Admin Only) - strictly maps the complete object structure
       const submitKeterangan = async (e) => {
         e.preventDefault();
         if (currentUser.role !== 'admin') return;
 
+        const cleanStartDate = formatToInputDate(keteranganModal.todo.startDate);
+        const cleanEndDate = formatToInputDate(keteranganModal.todo.endDate);
+
         const updatedActivity = { 
-          ...keteranganModal.todo, 
-          keterangan: keteranganModal.text 
+          action: 'saveTodo',
+          id: keteranganModal.todo.id,
+          task: keteranganModal.todo.task,
+          subActivity: keteranganModal.todo.subActivity,
+          pic: keteranganModal.todo.pic,
+          startDate: cleanStartDate,
+          endDate: cleanEndDate,
+          progress: Number(keteranganModal.todo.progress),
+          keterangan: keteranganModal.text,
+          createdBy: keteranganModal.todo.createdBy || currentUser.username
         };
 
         if (apiUrl && apiUrl !== defaultGasUrl) {
@@ -802,10 +867,7 @@
               method: 'POST',
               mode: 'cors',
               headers: { 'Content-Type': 'text/plain' },
-              body: JSON.stringify({
-                action: 'saveTodo',
-                ...updatedActivity
-              })
+              body: JSON.stringify(updatedActivity)
             });
             const data = await res.json();
             if (data.status === 'success') {
@@ -815,6 +877,7 @@
               alert('Gagal menyimpan keterangan: ' + data.message);
             }
           } catch (err) {
+            console.error('Penyimpanan cloud gagal, menyimpan lokal.', err);
             saveActivityLocally(updatedActivity);
             setKeteranganModal({ isOpen: false, todo: null, text: '' });
           } finally {
@@ -841,11 +904,22 @@
         return new Intl.DateTimeFormat('id-ID-u-ca-islamic-umalqura', options).format(today);
       };
 
-      // Pagination helper variables
+      // Sort all todos chronologically based on startDate (oldest/earliest to newest)
+      const sortedTodos = [...todos].sort((a, b) => {
+        const dateA = new Date(formatToInputDate(a.startDate));
+        const dateB = new Date(formatToInputDate(b.startDate));
+        
+        if (isNaN(dateA.getTime())) return 1;
+        if (isNaN(dateB.getTime())) return -1;
+        
+        return dateA - dateB; // Urutan menaik (Ascending): tanggal paling lama di atas, paling baru di bawah
+      });
+
+      // Pagination helper variables based on sorted todos list
       const idxOfLastRow = currentPage * rowsPerPage;
       const idxOfFirstRow = idxOfLastRow - rowsPerPage;
-      const currentTodos = todos.slice(idxOfFirstRow, idxOfLastRow);
-      const totalPages = Math.ceil(todos.length / rowsPerPage);
+      const currentTodos = sortedTodos.slice(idxOfFirstRow, idxOfLastRow);
+      const totalPages = Math.ceil(sortedTodos.length / rowsPerPage);
 
       return (
         <div class="flex-grow flex flex-col">
@@ -1037,7 +1111,7 @@
               {/* Tab navigation (Scrollable Horizontal) */}
               <div class="flex overflow-x-auto no-scrollbar bg-white dark:bg-stone-900 p-1.5 rounded-2xl shadow-sm border border-stone-100 dark:border-stone-800 space-x-1">
                 <button 
-                  onClick={() => setCurrentTab('home')}
+                  onClick={() => { setCurrentTab('home'); setCurrentPage(1); }}
                   class={`flex-1 min-w-[90px] flex-shrink-0 py-3 px-2 text-xs font-bold rounded-xl transition-all ${currentTab === 'home' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
                 >
                   <i class="fa-solid fa-home text-base block mb-1 text-center"></i> Beranda
@@ -1138,7 +1212,7 @@
                     </div>
                   </div>
 
-                  {/* Todo/Activities List Table Card with Pagination */}
+                  {/* Todo/Activities List Table Card with Pagination (Chronologically Sorted oldest to newest) */}
                   <div class="bg-white dark:bg-stone-900 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 overflow-hidden">
                     <div class="p-5 border-b border-stone-100 dark:border-stone-800 flex items-center justify-between">
                       <div class="flex items-center space-x-2">
@@ -1289,7 +1363,7 @@
                           {Array.from({ length: 31 }, (_, i) => {
                             const dateNum = i + 1;
                             const dateStr = `2026-06-${dateNum.toString().padStart(2, '0')}`;
-                            const dayTasks = todos.filter(t => t.startDate <= dateStr && t.endDate >= dateStr);
+                            const dayTasks = todos.filter(t => formatToInputDate(t.startDate) <= dateStr && formatToInputDate(t.endDate) >= dateStr);
                             
                             return (
                               <button 
@@ -1449,7 +1523,7 @@
                 </div>
               )}
 
-              {/* Tab: Live Makk */}
+              {/* Tab: Live Makkah */}
               {currentTab === 'makkah' && (
                 <div class="space-y-4">
                   <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 flex flex-col">
