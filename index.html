@@ -96,7 +96,7 @@
 
     function App() {
       // Configuration & Base States (URL set to default or saved)
-      const defaultGasUrl = 'https://script.google.com/macros/s/AKfycbziKrJcznWIOAYSA7LfmtaMw8-mxdCT5ew6QzSitdFdLuacbNscFINfBHthARRPo_3fKA/exec';
+      const defaultGasUrl = 'https://script.google.com/macros/s/AKfycbxuDR0CGb106ndozi6VvSj5JtcwMaIbIdfgHLGXt0nl6d6Ybns5XzGvbARSSqZDdForMw/exec';
       const [apiConnected, setApiConnected] = useState(false);
       const [apiUrl, setApiUrl] = useState(() => localStorage.getItem('gas_api_url') || defaultGasUrl);
       const [currentUser, setCurrentUser] = useState(() => {
@@ -122,6 +122,10 @@
       const [loginForm, setLoginForm] = useState({ username: '', password: '' });
       const [authError, setAuthError] = useState('');
       const [authSuccess, setAuthSuccess] = useState('');
+      
+      // Database Config Panel on Login Screen
+      const [showLoginDbConfig, setShowLoginDbConfig] = useState(false);
+      const [tempApiUrl, setTempApiUrl] = useState(apiUrl);
 
       // Task/Activity Modal Form State
       const [isModalOpen, setIsModalOpen] = useState(false);
@@ -134,6 +138,7 @@
         startDate: '',
         endDate: '',
         progress: 0,
+        keterangan: '',
         createdBy: ''
       });
       const [isEditing, setIsEditing] = useState(false);
@@ -144,6 +149,9 @@
         title: '',
         content: ''
       });
+
+      // Keterangan Modal State
+      const [keteranganModal, setKeteranganModal] = useState({ isOpen: false, todo: null, text: '' });
 
       // Quran Component States
       const [quranSurahs, setQuranSurahs] = useState([]);
@@ -159,9 +167,9 @@
 
       // Static Backup/Demo Data (When API not configured or offline)
       const fallbackTodos = [
-        { id: '1', task: 'Ujian Tengah Semester Ganjil', subActivity: 'Persiapan lembar soal & pengawas madrasah', pic: 'Ust. Ahmad', startDate: '2026-06-01', endDate: '2026-06-05', progress: 50, createdBy: 'admin' },
-        { id: '2', task: 'Rapat Kerja Tahunan Madrasah', subActivity: 'Penyusunan anggaran belanja sekolah', pic: 'Bu Aminah', startDate: '2026-06-10', endDate: '2026-06-12', progress: 100, createdBy: 'admin' },
-        { id: '3', task: 'Penerimaan Santri Baru (PSB)', subActivity: 'Seleksi berkas & wawancara online', pic: 'Ust. Zulkifli', startDate: '2026-06-15', endDate: '2026-06-20', progress: 20, createdBy: 'admin' }
+        { id: '1', task: 'Ujian Tengah Semester Ganjil', subActivity: 'Persiapan lembar soal & pengawas madrasah', pic: 'Ust. Ahmad', startDate: '2026-06-01', endDate: '2026-06-05', progress: 50, createdBy: 'admin', keterangan: 'Soal sedang dicetak.' },
+        { id: '2', task: 'Rapat Kerja Tahunan Madrasah', subActivity: 'Penyusunan anggaran belanja sekolah', pic: 'Bu Aminah', startDate: '2026-06-10', endDate: '2026-06-12', progress: 100, createdBy: 'admin', keterangan: 'Rapat berjalan lancar.' },
+        { id: '3', task: 'Penerimaan Santri Baru (PSB)', subActivity: 'Seleksi berkas & wawancara online', pic: 'Ust. Zulkifli', startDate: '2026-06-15', endDate: '2026-06-20', progress: 20, createdBy: 'admin', keterangan: '' }
       ];
 
       const fallbackInfos = [
@@ -206,7 +214,7 @@
 
       // Handle Data Synchronization with Google Sheets API
       const syncWithCloud = async (urlToUse = apiUrl) => {
-        if (!urlToUse) {
+        if (!urlToUse || urlToUse === defaultGasUrl) {
           // Fallbacks
           setTodos(JSON.parse(localStorage.getItem('local_todos')) || fallbackTodos);
           setInfos(JSON.parse(localStorage.getItem('local_infos')) || fallbackInfos);
@@ -247,7 +255,6 @@
       // Periodic Auto-Sync and Initial Sync
       useEffect(() => {
         if (apiUrl) {
-          // Ensure auto-sync on load if URL is set
           localStorage.setItem('gas_api_url', apiUrl);
         }
         syncWithCloud();
@@ -260,7 +267,7 @@
         if (!localUsers) {
           const defaultUsers = [
             { username: 'admin', email: 'admin@manicalendar.com', password: '123', role: 'admin' },
-            { username: 'rafliano', email: 'raliano@school.id', password: '123', role: 'admin' },
+            { username: 'rafliano', email: 'rafliano@school.id', password: '123', role: 'admin' },
             { username: 'guru1', email: 'guru@school.id', password: '123', role: 'user' }
           ];
           localStorage.setItem('local_users', JSON.stringify(defaultUsers));
@@ -380,7 +387,7 @@
         const usernameLower = regForm.username.toLowerCase();
         const emailLower = regForm.email.toLowerCase();
 
-        if (apiUrl) {
+        if (apiUrl && apiUrl !== defaultGasUrl) {
           setSyncing(true);
           try {
             const response = await fetch(apiUrl, {
@@ -447,7 +454,7 @@
 
         const queryStr = loginForm.username.toLowerCase();
 
-        if (apiUrl) {
+        if (apiUrl && apiUrl !== defaultGasUrl) {
           setSyncing(true);
           try {
             const res = await fetch(`${apiUrl}?action=getUsers`);
@@ -520,7 +527,7 @@
       const handleSaveActivity = async (e) => {
         e.preventDefault();
         if (currentUser.role !== 'admin') {
-          alert('Hanya Administrator yang dapat merevisi rencana kerja!');
+          alert('Hanya Administrator yang dapat memanipulasi rencana kerja!');
           return;
         }
 
@@ -533,10 +540,11 @@
           startDate: activityForm.startDate || new Date().toISOString().split('T')[0],
           endDate: activityForm.endDate,
           progress: Number(activityForm.progress),
+          keterangan: activityForm.keterangan || '',
           createdBy: currentUser.username
         };
 
-        if (apiUrl) {
+        if (apiUrl && apiUrl !== defaultGasUrl) {
           setSyncing(true);
           try {
             const res = await fetch(apiUrl, {
@@ -582,7 +590,7 @@
       const handleSaveInfo = async (e) => {
         e.preventDefault();
         if (currentUser.role !== 'admin') {
-          alert('Hanya Administrator yang dapat menambahkan informasi!');
+          alert('Hanya Administrator yang dapat menambahkan pengumuman informasi!');
           return;
         }
 
@@ -601,7 +609,7 @@
           createdBy: currentUser.username
         };
 
-        if (apiUrl) {
+        if (apiUrl && apiUrl !== defaultGasUrl) {
           setSyncing(true);
           try {
             const res = await fetch(apiUrl, {
@@ -642,7 +650,7 @@
       const handleDeleteActivity = async (activityId) => {
         if (!confirm('Apakah Anda yakin ingin menghapus rencana kerja ini?')) return;
 
-        if (apiUrl) {
+        if (apiUrl && apiUrl !== defaultGasUrl) {
           setSyncing(true);
           try {
             const res = await fetch(apiUrl, {
@@ -678,7 +686,7 @@
       const handleDeleteInfo = async (infoId) => {
         if (!confirm('Apakah Anda yakin ingin menghapus informasi ini?')) return;
 
-        if (apiUrl) {
+        if (apiUrl && apiUrl !== defaultGasUrl) {
           setSyncing(true);
           try {
             const res = await fetch(apiUrl, {
@@ -715,7 +723,7 @@
         if (currentUser.role !== 'admin') return;
         const updatedActivity = { ...activity, progress: 100 };
         
-        if (apiUrl) {
+        if (apiUrl && apiUrl !== defaultGasUrl) {
           setSyncing(true);
           try {
             const res = await fetch(apiUrl, {
@@ -756,6 +764,7 @@
           startDate: dateStr,
           endDate: dateStr,
           progress: 0,
+          keterangan: '',
           createdBy: currentUser.username
         });
         setIsEditing(false);
@@ -772,10 +781,52 @@
           startDate: activity.startDate,
           endDate: activity.endDate,
           progress: activity.progress,
+          keterangan: activity.keterangan || '',
           createdBy: activity.createdBy
         });
         setIsEditing(true);
         setIsModalOpen(true);
+      };
+
+      // Save Keterangan (Admin Only)
+      const submitKeterangan = async (e) => {
+        e.preventDefault();
+        if (currentUser.role !== 'admin') return;
+
+        const updatedActivity = { 
+          ...keteranganModal.todo, 
+          keterangan: keteranganModal.text 
+        };
+
+        if (apiUrl && apiUrl !== defaultGasUrl) {
+          setSyncing(true);
+          try {
+            const res = await fetch(apiUrl, {
+              method: 'POST',
+              mode: 'cors',
+              headers: { 'Content-Type': 'text/plain' },
+              body: JSON.stringify({
+                action: 'saveTodo',
+                ...updatedActivity
+              })
+            });
+            const data = await res.json();
+            if (data.status === 'success') {
+              syncWithCloud();
+              setKeteranganModal({ isOpen: false, todo: null, text: '' });
+            } else {
+              alert('Gagal menyimpan keterangan: ' + data.message);
+            }
+          } catch (err) {
+            saveActivityLocally(updatedActivity);
+            setKeteranganModal({ isOpen: false, todo: null, text: '' });
+          } finally {
+            setSyncing(false);
+          }
+        } else {
+          saveActivityLocally(updatedActivity);
+          setKeteranganModal({ isOpen: false, todo: null, text: '' });
+        }
       };
 
       // Save database setting URL
@@ -784,6 +835,15 @@
         localStorage.setItem('gas_api_url', apiUrl);
         syncWithCloud(apiUrl);
         alert('Tautan Google Apps Script berhasil diperbarui & sinkronisasi ulang!');
+      };
+
+      // Save database setting URL from login screen directly
+      const handleSaveLoginDbConfig = (e) => {
+        e.preventDefault();
+        setApiUrl(tempApiUrl);
+        localStorage.setItem('gas_api_url', tempApiUrl);
+        alert('Database URL berhasil diset! Silakan coba masuk kembali.');
+        setShowLoginDbConfig(false);
       };
 
       // Hijri Calendar calculations
@@ -849,7 +909,7 @@
             </div>
           </header>
 
-          {/* Non-Authenticated State (Login & Register) */}
+          {/* Non-Authenticated State (Login, Register & Database Settings) */}
           {!currentUser ? (
             <main class="flex-grow flex items-center justify-center p-4">
               <div class="w-full max-w-md glass-card rounded-3xl shadow-2xl overflow-hidden p-6 border transition-all">
@@ -858,7 +918,7 @@
                     <i class="fa-solid fa-calendar-check text-3xl"></i>
                   </div>
                   <h2 class="text-2xl font-extrabold text-islamic-dark dark:text-stone-100">Selamat Datang di ManiCalendar</h2>
-                  <p class="text-xs text-stone-500 dark:text-stone-400 mt-1">Platform Manajemen Aktivitas Madrasah </p>
+                  <p class="text-xs text-stone-500 dark:text-stone-400 mt-1">Platform Manajemen Aktivitas & Agenda Harian Madrasah Modern</p>
                 </div>
 
                 {authError && (
@@ -873,7 +933,41 @@
                   </div>
                 )}
 
-                {isRegisterMode ? (
+                {showLoginDbConfig ? (
+                  /* Database setup form directly on login page */
+                  <form onSubmit={handleSaveLoginDbConfig} class="space-y-4">
+                    <div class="p-3.5 bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 rounded-2xl text-[11px] leading-relaxed">
+                      <p class="font-bold mb-1"><i class="fa-solid fa-circle-info mr-1"></i> Pengaturan Koneksi Awal:</p>
+                      Masukkan URL Google Apps Script Anda di sini agar pendaftaran dan verifikasi akun langsung terhubung ke Google Sheet Anda secara instan.
+                    </div>
+                    <div>
+                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">URL Google Apps Script Web App</label>
+                      <input 
+                        type="url" 
+                        required
+                        class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
+                        placeholder="https://script.google.com/macros/s/.../exec"
+                        value={tempApiUrl}
+                        onChange={(e) => setTempApiUrl(e.target.value)}
+                      />
+                    </div>
+                    <div class="flex space-x-2">
+                      <button 
+                        type="submit" 
+                        class="flex-1 py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-islamic-mint text-white font-bold transition-all text-xs"
+                      >
+                        <i class="fa-solid fa-save mr-1"></i> Simpan & Hubungkan
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={() => setShowLoginDbConfig(false)}
+                        class="px-4 py-3.5 rounded-xl bg-stone-100 dark:bg-stone-800 text-stone-500 hover:text-stone-700 text-xs font-bold"
+                      >
+                        Batal
+                      </button>
+                    </div>
+                  </form>
+                ) : isRegisterMode ? (
                   /* Register Form */
                   <form onSubmit={handleRegister} class="space-y-4">
                     <div>
@@ -918,86 +1012,71 @@
                       {syncing ? <i class="fa-solid fa-spinner animate-spin"></i> : 'Daftar Akun Baru'}
                     </button>
 
-                    <div class="text-center text-xs text-stone-500 mt-4">
-                      Sudah punya akun?{' '}
-                      <button type="button" onClick={() => { setIsRegisterMode(false); setAuthError(''); }} class="text-emerald-600 font-bold hover:underline">Masuk disini</button>
+                    <div class="flex justify-between items-center text-xs mt-4">
+                      <span class="text-stone-500">
+                        Sudah punya akun?{' '}
+                        <button type="button" onClick={() => { setIsRegisterMode(false); setAuthError(''); }} class="text-emerald-600 font-bold hover:underline">Masuk disini</button>
+                      </span>
+                      <button 
+                        type="button" 
+                        onClick={() => { setTempApiUrl(apiUrl === defaultGasUrl ? '' : apiUrl); setShowLoginDbConfig(true); }}
+                        class="text-amber-500 hover:text-amber-600 font-bold flex items-center"
+                      >
+                        <i class="fa-solid fa-database mr-1"></i> Set Database
+                      </button>
                     </div>
                   </form>
                 ) : (
-                  /* Login Form */
-                  <form onSubmit={handleLogin} class="space-y-4">
-                    <div>
-                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Username atau Email</label>
-                      <input 
-                        type="text" 
-                        required
-                        class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                        placeholder="Masukkan Username atau Email"
-                        value={loginForm.username}
-                        onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Password</label>
-                      <input 
-                        type="password" 
-                        required
-                        class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                        placeholder="••••••••"
-                        value={loginForm.password}
-                        onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
-                      />
-                    </div>
-                    
-                    <button 
-                      type="submit" 
-                      disabled={syncing}
-                      class="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-islamic-mint text-white font-bold transition-all transform active:scale-95 disabled:opacity-50"
-                    >
-                      {syncing ? <i class="fa-solid fa-spinner animate-spin"></i> : 'Masuk Aplikasi'}
-                    </button>
-
-                    <div class="text-center text-xs text-stone-500 mt-4">
-                      Belum memiliki akun?{' '}
-                      <button type="button" onClick={() => { setIsRegisterMode(true); setAuthError(''); }} class="text-emerald-600 font-bold hover:underline">Registrasi disini</button>
-                    </div>
-                  </form>
-                )}
-              </div>
-            </main>
-          ) : (
-            /* Authenticated Application Panels with 5 Tabs */
+            /* Authenticated Application Panels with 8 Tabs */
             <main class="flex-grow max-w-4xl w-full mx-auto p-4 flex flex-col space-y-4">
               
-              {/* Tab navigation (5 Tabs Now: Beranda, Kalender, Quran, Informasi, Sistem) */}
-              <div class="flex justify-around bg-white dark:bg-stone-900 p-1.5 rounded-2xl shadow-sm border border-stone-100 dark:border-stone-800">
+              {/* Tab navigation (Scrollable Horizontal) */}
+              <div class="flex overflow-x-auto no-scrollbar bg-white dark:bg-stone-900 p-1.5 rounded-2xl shadow-sm border border-stone-100 dark:border-stone-800 space-x-1">
                 <button 
                   onClick={() => setCurrentTab('home')}
-                  class={`flex-1 py-3 text-xs font-bold rounded-xl transition-all ${currentTab === 'home' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
+                  class={`flex-1 min-w-[90px] flex-shrink-0 py-3 px-2 text-xs font-bold rounded-xl transition-all ${currentTab === 'home' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
                 >
                   <i class="fa-solid fa-home text-base block mb-1 text-center"></i> Beranda
                 </button>
                 <button 
                   onClick={() => setCurrentTab('calendar')}
-                  class={`flex-1 py-3 text-xs font-bold rounded-xl transition-all ${currentTab === 'calendar' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
+                  class={`flex-1 min-w-[90px] flex-shrink-0 py-3 px-2 text-xs font-bold rounded-xl transition-all ${currentTab === 'calendar' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
                 >
                   <i class="fa-solid fa-calendar-alt text-base block mb-1 text-center"></i> Kalender
                 </button>
                 <button 
                   onClick={() => setCurrentTab('quran')}
-                  class={`flex-1 py-3 text-xs font-bold rounded-xl transition-all ${currentTab === 'quran' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
+                  class={`flex-1 min-w-[90px] flex-shrink-0 py-3 px-2 text-xs font-bold rounded-xl transition-all ${currentTab === 'quran' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
                 >
                   <i class="fa-solid fa-book-quran text-base block mb-1 text-center"></i> Quran
                 </button>
                 <button 
+                  onClick={() => setCurrentTab('radio')}
+                  class={`flex-1 min-w-[90px] flex-shrink-0 py-3 px-2 text-xs font-bold rounded-xl transition-all ${currentTab === 'radio' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
+                >
+                  <i class="fa-solid fa-radio text-base block mb-1 text-center"></i> Radio Rodja
+                </button>
+                <button 
+                  onClick={() => setCurrentTab('makkah')}
+                  class={`flex-1 min-w-[90px] flex-shrink-0 py-3 px-2 text-xs font-bold rounded-xl transition-all ${currentTab === 'makkah' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
+                >
+                  <i class="fa-brands fa-youtube text-base block mb-1 text-center"></i> Live Makkah
+                </button>
+                <button 
+                  onClick={() => setCurrentTab('madinah')}
+                  class={`flex-1 min-w-[90px] flex-shrink-0 py-3 px-2 text-xs font-bold rounded-xl transition-all ${currentTab === 'madinah' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
+                >
+                  <i class="fa-brands fa-youtube text-base block mb-1 text-center"></i> Live Madinah
+                </button>
+                <button 
                   onClick={() => setCurrentTab('info')}
-                  class={`flex-1 py-3 text-xs font-bold rounded-xl transition-all ${currentTab === 'info' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
+                  class={`flex-1 min-w-[90px] flex-shrink-0 py-3 px-2 text-xs font-bold rounded-xl transition-all ${currentTab === 'info' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
                 >
                   <i class="fa-solid fa-circle-info text-base block mb-1 text-center"></i> Informasi
                 </button>
                 <button 
                   onClick={() => setCurrentTab('settings')}
-                  class={`flex-1 py-3 text-xs font-bold rounded-xl transition-all ${currentTab === 'settings' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
+                  class={`flex-1 min-w-[90px] flex-shrink-0 py-3 px-2 text-xs font-bold rounded-xl transition-all ${currentTab === 'settings' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
                 >
                   <i class="fa-solid fa-cog text-base block mb-1 text-center"></i> Sistem
                 </button>
@@ -1060,7 +1139,7 @@
                     <div class="p-5 border-b border-stone-100 dark:border-stone-800 flex items-center justify-between">
                       <div class="flex items-center space-x-2">
                         <i class="fa-solid fa-list-check text-emerald-600"></i>
-                        <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100">Rencana Kerja Madrasah</h4>
+                        <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100">Daftar Rencana Kerja Sekolah Madrasah</h4>
                       </div>
                       {currentUser.role === 'admin' && (
                         <button 
@@ -1095,8 +1174,13 @@
                               <tr key={todo.id} class="hover:bg-stone-50/50 dark:hover:bg-stone-800/20">
                                 <td class="px-4 py-4 font-bold text-stone-400">{idxOfFirstRow + idx + 1}</td>
                                 <td class="px-4 py-4">
-                                  <div class="font-bold text-stone-800 dark:text-stone-100 text-sm">{todo.task}</div>
-                                  <div class="text-xs text-stone-400 mt-0.5">{todo.subActivity}</div>
+                                  <button onClick={() => setKeteranganModal({ isOpen: true, todo: todo, text: todo.keterangan || '' })} class="text-left group w-full outline-none focus:outline-none">
+                                    <div class="font-bold text-emerald-700 dark:text-emerald-500 text-sm group-hover:underline cursor-pointer flex items-center">
+                                      {todo.task}
+                                      <i class="fa-solid fa-arrow-up-right-from-square text-[10px] ml-2 opacity-50 group-hover:opacity-100 transition-opacity"></i>
+                                    </div>
+                                    <div class="text-xs text-stone-500 dark:text-stone-400 mt-0.5">{todo.subActivity}</div>
+                                  </button>
                                 </td>
                                 <td class="px-4 py-4 text-stone-600 dark:text-stone-300 font-medium whitespace-nowrap">{formatDateStr(todo.startDate)}</td>
                                 <td class="px-4 py-4 text-stone-600 dark:text-stone-300 font-medium whitespace-nowrap">{formatDateStr(todo.endDate)}</td>
@@ -1233,117 +1317,45 @@
                 </div>
               )}
 
-              {/* Tab 3: Quran Portal (with single Ayah and FULL Surah audio player) */}
-              {currentTab === 'quran' && (
+              {/* Tab: Radio Rodja */}
+              {currentTab === 'radio' && (
                 <div class="space-y-4">
-                  {!selectedSurah ? (
-                    <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
-                      <div class="mb-4">
-                        <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100 flex items-center mb-2">
-                          <i class="fa-solid fa-book-open text-emerald-600 mr-2"></i> Portal Al-Quran & Terjemah
-                        </h4>
-                        <div class="relative">
-                          <input 
-                            type="text" 
-                            class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                            placeholder="Cari surat (Contoh: Al-Fatihah, Ya-Sin)..."
-                            value={quranSearch}
-                            onChange={(e) => setQuranSearch(e.target.value)}
-                          />
-                          <i class="fa-solid fa-search text-stone-400 absolute left-3.5 top-3.5 text-xs"></i>
-                        </div>
-                      </div>
-
-                      {loadingQuran ? (
-                        <div class="text-center py-10">
-                          <i class="fa-solid fa-spinner animate-spin text-emerald-600 text-2xl"></i>
-                          <p class="text-xs text-stone-400 mt-2">Memuat data Al-Quran...</p>
-                        </div>
-                      ) : (
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto no-scrollbar">
-                          {quranSurahs
-                            .filter(surah => surah.englishName.toLowerCase().includes(quranSearch.toLowerCase()) || surah.name.includes(quranSearch))
-                            .map((surah) => (
-                              <button 
-                                key={surah.number}
-                                onClick={() => viewSurahDetails(surah.number)}
-                                class="p-3.5 rounded-2xl bg-stone-50/50 hover:bg-emerald-50/40 border border-stone-100 dark:bg-stone-800/25 dark:border-stone-800/40 text-left transition-all hover:scale-[1.01] flex items-center justify-between"
-                              >
-                                <div class="flex items-center space-x-3">
-                                  <span class="bg-emerald-600/10 text-emerald-600 font-bold w-7 h-7 flex items-center justify-center rounded-xl text-xs">{surah.number}</span>
-                                  <div>
-                                    <div class="font-bold text-xs">{surah.englishName}</div>
-                                    <div class="text-[10px] text-stone-400 uppercase tracking-widest">{surah.englishNameTranslation} ({surah.numberOfAyahs} Ayat)</div>
-                                  </div>
-                                </div>
-                                <div class="arabic-text text-lg text-emerald-700 font-bold">{surah.name}</div>
-                              </button>
-                            ))
-                          }
-                        </div>
-                      )}
+                  <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 flex flex-col h-[500px]">
+                    <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100 mb-3 flex items-center">
+                      <i class="fa-solid fa-radio text-emerald-600 mr-2"></i> Streaming Radio Rodja
+                    </h4>
+                    <div class="w-full flex-grow rounded-2xl overflow-hidden border border-stone-100 dark:border-stone-800 relative bg-stone-50">
+                      <iframe src="https://www.radiorodja.com/live/" class="absolute top-0 left-0 w-full h-full border-none"></iframe>
                     </div>
-                  ) : (
-                    /* Surah Detail Ayah Viewer with FULL SURAH AUDIO PLAYER added */
-                    <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
-                      <div class="flex items-center justify-between pb-3 border-b border-stone-100 dark:border-stone-800 mb-4 flex-wrap gap-2">
-                        <button 
-                          onClick={() => { setSelectedSurah(null); setSurahDetails(null); setIsPlayingFullSurah(false); if (audioRef.current) audioRef.current.pause(); }}
-                          class="text-xs text-emerald-600 font-bold flex items-center hover:underline"
-                        >
-                          <i class="fa-solid fa-arrow-left mr-1"></i> Kembali ke Daftar
-                        </button>
+                  </div>
+                </div>
+              )}
 
-                        <div class="flex items-center space-x-2">
-                          <button
-                            onClick={handlePlayFullSurah}
-                            class={`text-xs px-3 py-1.5 rounded-xl font-bold transition-all shadow-sm flex items-center ${isPlayingFullSurah ? 'bg-amber-500 text-white animate-pulse' : 'bg-emerald-700 text-white hover:bg-emerald-800'}`}
-                          >
-                            <i class={`fa-solid ${isPlayingFullSurah ? 'fa-pause' : 'fa-play-circle'} mr-1.5 text-sm`}></i>
-                            {isPlayingFullSurah ? 'Pause Full Surat' : 'Putar Full Surat'}
-                          </button>
-                          {surahDetails && (
-                            <div class="text-right">
-                              <h4 class="font-bold text-xs">{surahDetails.info.englishName}</h4>
-                              <p class="text-[10px] text-stone-400">{surahDetails.info.numberOfAyahs} Ayat</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {loadingQuran || !surahDetails ? (
-                        <div class="text-center py-10">
-                          <i class="fa-solid fa-spinner animate-spin text-emerald-600 text-2xl"></i>
-                          <p class="text-xs text-stone-400 mt-2">Memuat ayat...</p>
-                        </div>
-                      ) : (
-                        <div class="space-y-4 max-h-[500px] overflow-y-auto pr-2 no-scrollbar">
-                          {selectedSurah !== 1 && selectedSurah !== 9 && (
-                            <div class="text-center arabic-text text-xl py-4 text-emerald-800">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
-                          )}
-
-                          {surahDetails.verses.map((verse, vIdx) => (
-                            <div 
-                              key={verse.number} 
-                              class={`p-4 rounded-2xl border transition-all ${isPlayingFullSurah && currentFullSurahIndex === vIdx ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-500/35' : 'bg-stone-50 dark:bg-stone-800/40 border-stone-100/50 dark:border-stone-800/40'}`}
-                            >
-                              <div class="flex items-center justify-between">
-                                <span class="bg-emerald-600/10 text-emerald-600 font-bold text-[10px] w-6 h-6 flex items-center justify-center rounded-lg">{verse.number}</span>
-                                <button 
-                                  onClick={() => handlePlayAudio(verse.audio, verse.number)}
-                                  class={`text-xs p-2 rounded-xl transition-all ${playingAudio && playingAudio.id === verse.number && !isPlayingFullSurah ? 'bg-amber-500 text-white' : 'bg-emerald-600 text-white'}`}
-                                >
-                                  {playingAudio && playingAudio.id === verse.number && !isPlayingFullSurah ? <i class="fa-solid fa-pause"></i> : <i class="fa-solid fa-volume-high"></i>} Play Audio
-                                </button>
-                              </div>
-                              <div class="arabic-text text-right text-xl font-bold leading-loose text-slate-800 dark:text-stone-100 py-2">{verse.text}</div>
-                              <div class="text-stone-500 dark:text-stone-400 italic text-[11px] leading-relaxed mt-1 text-left">{verse.translation}</div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+              {/* Tab: Live Makkah */}
+              {currentTab === 'makkah' && (
+                <div class="space-y-4">
+                  <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 flex flex-col">
+                    <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100 mb-3 flex items-center">
+                      <i class="fa-brands fa-youtube text-red-600 mr-2"></i> Live Makkah Al-Mukarramah
+                    </h4>
+                    <div class="relative w-full pb-[56.25%] h-0 rounded-2xl overflow-hidden shadow-inner bg-black">
+                      <iframe src="https://www.youtube.com/embed/grO45DMs2GI?autoplay=1&mute=1" class="absolute top-0 left-0 w-full h-full border-none" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
                     </div>
-                  )}
+                  </div>
+                </div>
+              )}
+
+              {/* Tab: Live Madinah */}
+              {currentTab === 'madinah' && (
+                <div class="space-y-4">
+                  <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 flex flex-col">
+                    <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100 mb-3 flex items-center">
+                      <i class="fa-brands fa-youtube text-red-600 mr-2"></i> Live Madinah Al-Munawwarah
+                    </h4>
+                    <div class="relative w-full pb-[56.25%] h-0 rounded-2xl overflow-hidden shadow-inner bg-black">
+                      <iframe src="https://www.youtube.com/embed/i9eWYq0mOS8?autoplay=1&mute=1" class="absolute top-0 left-0 w-full h-full border-none" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -1603,6 +1615,61 @@
                     <i class="fa-solid fa-paper-plane mr-1"></i> Publikasikan Informasi
                   </button>
                 </form>
+              </div>
+            </div>
+          )}
+
+          {/* Modal Form Keterangan Aktifitas */}
+          {keteranganModal.isOpen && keteranganModal.todo && (
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <div class="w-full max-w-md bg-white dark:bg-stone-900 rounded-3xl shadow-2xl border border-stone-100 dark:border-stone-800 overflow-hidden p-6 relative">
+                <button 
+                  onClick={() => setKeteranganModal({ isOpen: false, todo: null, text: '' })}
+                  class="absolute top-4 right-4 text-stone-400 hover:text-stone-600"
+                >
+                  <i class="fa-solid fa-circle-xmark text-xl"></i>
+                </button>
+
+                <h3 class="text-base font-bold text-islamic-dark dark:text-stone-100 mb-4 flex items-center">
+                  <i class="fa-solid fa-file-signature text-emerald-600 mr-2"></i> Detail & Keterangan Aktifitas
+                </h3>
+
+                <div class="mb-4 p-3 bg-stone-50 dark:bg-stone-800 rounded-xl border border-stone-100 dark:border-stone-700">
+                  <div class="font-bold text-sm text-stone-800 dark:text-stone-100">{keteranganModal.todo.task}</div>
+                  <div class="text-xs text-stone-500 mt-1">{keteranganModal.todo.subActivity}</div>
+                </div>
+
+                {currentUser.role === 'admin' ? (
+                  <form onSubmit={submitKeterangan} class="space-y-4 text-xs text-left">
+                    <div>
+                      <label class="block text-[10px] font-bold uppercase text-stone-400 mb-1">Keterangan (Max 100 Karakter)</label>
+                      <textarea 
+                        required
+                        maxLength="100"
+                        rows="3"
+                        class="w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                        placeholder="Masukkan keterangan pencapaian..."
+                        value={keteranganModal.text}
+                        onChange={(e) => setKeteranganModal({ ...keteranganModal, text: e.target.value })}
+                      />
+                      <span class="text-[9px] text-stone-400 block mt-0.5 text-right">{keteranganModal.text.length}/100 karakter</span>
+                    </div>
+
+                    <button 
+                      type="submit" 
+                      class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-islamic-mint text-white font-bold transition-all"
+                    >
+                      <i class="fa-solid fa-save mr-1"></i> Simpan Keterangan
+                    </button>
+                  </form>
+                ) : (
+                  <div class="space-y-2 text-xs">
+                    <label class="block text-[10px] font-bold uppercase text-stone-400">Keterangan Pencapaian:</label>
+                    <div class="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-200 border border-emerald-100 dark:border-emerald-800/50 italic">
+                      {keteranganModal.todo.keterangan ? keteranganModal.todo.keterangan : "Belum ada keterangan pencapaian kerja."}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
