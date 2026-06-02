@@ -97,7 +97,7 @@
 
     function App() {
       // Configuration & Base States (URL set to default or saved)
-      const defaultGasUrl = 'https://script.google.com/macros/s/AKfycbyloiHQJ8rkZzJyAj2fTJK_gpKZ9RztdtLXo8xO20VHfrb9CjuLdIOZoEVTKWj5vdvatg/exec';
+      const defaultGasUrl = 'https://script.google.com/macros/s/AKfycbywLZ00TKnywxYVJ198ZDplfZ-vtMBhLfiTapGGvStkp5qz8E73uh5MlzIIIF9W1pRDqw/exec';
       const [apiConnected, setApiConnected] = useState(false);
       const [apiUrl, setApiUrl] = useState(() => localStorage.getItem('gas_api_url') || defaultGasUrl);
       const [currentUser, setCurrentUser] = useState(() => {
