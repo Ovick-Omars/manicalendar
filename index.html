@@ -64,6 +64,7 @@
     .arabic-text {
       font-family: 'Amiri', serif;
     }
+    /* Hide scrollbars but keep functionality */
     .no-scrollbar::-webkit-scrollbar {
       display: none;
     }
@@ -103,7 +104,7 @@
         const saved = localStorage.getItem('active_user');
         return saved ? JSON.parse(saved) : null;
       });
-      const [currentTab, setCurrentTab] = useState('home'); // home | calendar | quran | info | settings
+      const [currentTab, setCurrentTab] = useState('home'); // home | calendar | quran | radio | makkah | madinah | info | settings
       const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
       
       // Data States
@@ -122,10 +123,6 @@
       const [loginForm, setLoginForm] = useState({ username: '', password: '' });
       const [authError, setAuthError] = useState('');
       const [authSuccess, setAuthSuccess] = useState('');
-      
-      // Database Config Panel on Login Screen
-      const [showLoginDbConfig, setShowLoginDbConfig] = useState(false);
-      const [tempApiUrl, setTempApiUrl] = useState(apiUrl);
 
       // Task/Activity Modal Form State
       const [isModalOpen, setIsModalOpen] = useState(false);
@@ -194,7 +191,6 @@
         try {
           const d = new Date(dateStr);
           if (isNaN(d.getTime())) {
-            // Check if string contains dash
             if (dateStr.includes('-')) {
               const parts = dateStr.split('-');
               if (parts.length === 3 && parts[0].length === 4) {
@@ -215,9 +211,11 @@
       // Handle Data Synchronization with Google Sheets API
       const syncWithCloud = async (urlToUse = apiUrl) => {
         if (!urlToUse || urlToUse === defaultGasUrl) {
-          // Fallbacks
-          setTodos(JSON.parse(localStorage.getItem('local_todos')) || fallbackTodos);
-          setInfos(JSON.parse(localStorage.getItem('local_infos')) || fallbackInfos);
+          // Fallbacks to local Storage
+          const localT = localStorage.getItem('local_todos');
+          const localI = localStorage.getItem('local_infos');
+          setTodos(localT ? JSON.parse(localT) : fallbackTodos);
+          setInfos(localI ? JSON.parse(localI) : fallbackInfos);
           setApiConnected(false);
           return;
         }
@@ -244,8 +242,10 @@
           }
         } catch (error) {
           console.warn('Sync failed, using offline cache.', error);
-          setTodos(JSON.parse(localStorage.getItem('local_todos')) || fallbackTodos);
-          setInfos(JSON.parse(localStorage.getItem('local_infos')) || fallbackInfos);
+          const localT = localStorage.getItem('local_todos');
+          const localI = localStorage.getItem('local_infos');
+          setTodos(localT ? JSON.parse(localT) : fallbackTodos);
+          setInfos(localI ? JSON.parse(localI) : fallbackInfos);
           setApiConnected(false);
         } finally {
           setSyncing(false);
@@ -254,7 +254,7 @@
 
       // Periodic Auto-Sync and Initial Sync
       useEffect(() => {
-        if (apiUrl) {
+        if (apiUrl && apiUrl !== defaultGasUrl) {
           localStorage.setItem('gas_api_url', apiUrl);
         }
         syncWithCloud();
@@ -403,9 +403,7 @@
             });
             const data = await response.json();
             if (data.status === 'success') {
-              setAuthSuccess('Registrasi berhasil! Silakan masuk menggunakan kredensial Anda agar tersinkronisasi.');
-              
-              // Automatically switch to login screen so they can login freshly
+              setAuthSuccess('Registrasi berhasil! Silakan masuk menggunakan kredensial Anda.');
               setLoginForm({ username: usernameLower, password: regForm.password });
               setIsRegisterMode(false);
             } else {
@@ -594,7 +592,6 @@
           return;
         }
 
-        // Generate current timestamp on Indonesian format (dd-mm-yyyy HH:MM)
         const now = new Date();
         const dateStr = formatDateStr(now.toISOString().split('T')[0]);
         const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -837,15 +834,6 @@
         alert('Tautan Google Apps Script berhasil diperbarui & sinkronisasi ulang!');
       };
 
-      // Save database setting URL from login screen directly
-      const handleSaveLoginDbConfig = (e) => {
-        e.preventDefault();
-        setApiUrl(tempApiUrl);
-        localStorage.setItem('gas_api_url', tempApiUrl);
-        alert('Database URL berhasil diset! Silakan coba masuk kembali.');
-        setShowLoginDbConfig(false);
-      };
-
       // Hijri Calendar calculations
       const getHijriDate = () => {
         const today = new Date();
@@ -867,12 +855,11 @@
               <div class="bg-white p-1 rounded-xl flex items-center justify-center shadow-sm w-10 h-10 overflow-hidden">
                 <img 
                   src="image_41b695.png" 
-                  alt="MAN Insan Cendekia Logo" 
+                  alt="Madrasah Logo" 
                   class="h-8 w-8 object-contain"
                   onError={(e) => {
-                    // Fallback to a high-quality inline elegant academic icon in case of complete offline status
-                    e.target.style.display = 'none';
-                    e.target.parentNode.innerHTML = '<i class="fa-solid fa-graduation-cap text-emerald-600 text-xl"></i>';
+                    // Fallback to MAN Insan Cendekia file directly
+                    e.target.src = "https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/Logo_Kementerian_Agama_Republik_Indonesia.png/120px-Logo_Kementerian_Agama_Republik_Indonesia.png";
                   }}
                 />
               </div>
@@ -909,10 +896,10 @@
             </div>
           </header>
 
-          {/* Non-Authenticated State (Login, Register & Database Settings) */}
+          {/* Non-Authenticated State (Login & Register) */}
           {!currentUser ? (
             <main class="flex-grow flex items-center justify-center p-4">
-              <div class="w-full max-w-md glass-card rounded-3xl shadow-2xl overflow-hidden p-6 border transition-all">
+              <div class="w-full max-w-md glass-card rounded-3xl shadow-2xl overflow-hidden p-6 border transition-all relative">
                 <div class="text-center mb-6">
                   <div class="inline-block bg-islamic-mint text-islamic-gold p-4 rounded-3xl mb-3 shadow-inner">
                     <i class="fa-solid fa-calendar-check text-3xl"></i>
@@ -933,41 +920,7 @@
                   </div>
                 )}
 
-                {showLoginDbConfig ? (
-                  /* Database setup form directly on login page */
-                  <form onSubmit={handleSaveLoginDbConfig} class="space-y-4">
-                    <div class="p-3.5 bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 rounded-2xl text-[11px] leading-relaxed">
-                      <p class="font-bold mb-1"><i class="fa-solid fa-circle-info mr-1"></i> Pengaturan Koneksi Awal:</p>
-                      Masukkan URL Google Apps Script Anda di sini agar pendaftaran dan verifikasi akun langsung terhubung ke Google Sheet Anda secara instan.
-                    </div>
-                    <div>
-                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">URL Google Apps Script Web App</label>
-                      <input 
-                        type="url" 
-                        required
-                        class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
-                        placeholder="https://script.google.com/macros/s/.../exec"
-                        value={tempApiUrl}
-                        onChange={(e) => setTempApiUrl(e.target.value)}
-                      />
-                    </div>
-                    <div class="flex space-x-2">
-                      <button 
-                        type="submit" 
-                        class="flex-1 py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-islamic-mint text-white font-bold transition-all text-xs"
-                      >
-                        <i class="fa-solid fa-save mr-1"></i> Simpan & Hubungkan
-                      </button>
-                      <button 
-                        type="button" 
-                        onClick={() => setShowLoginDbConfig(false)}
-                        class="px-4 py-3.5 rounded-xl bg-stone-100 dark:bg-stone-800 text-stone-500 hover:text-stone-700 text-xs font-bold"
-                      >
-                        Batal
-                      </button>
-                    </div>
-                  </form>
-                ) : isRegisterMode ? (
+                {isRegisterMode ? (
                   /* Register Form */
                   <form onSubmit={handleRegister} class="space-y-4">
                     <div>
@@ -1012,21 +965,72 @@
                       {syncing ? <i class="fa-solid fa-spinner animate-spin"></i> : 'Daftar Akun Baru'}
                     </button>
 
-                    <div class="flex justify-between items-center text-xs mt-4">
-                      <span class="text-stone-500">
-                        Sudah punya akun?{' '}
-                        <button type="button" onClick={() => { setIsRegisterMode(false); setAuthError(''); }} class="text-emerald-600 font-bold hover:underline">Masuk disini</button>
-                      </span>
-                      <button 
-                        type="button" 
-                        onClick={() => { setTempApiUrl(apiUrl === defaultGasUrl ? '' : apiUrl); setShowLoginDbConfig(true); }}
-                        class="text-amber-500 hover:text-amber-600 font-bold flex items-center"
-                      >
-                        <i class="fa-solid fa-database mr-1"></i> Set Database
-                      </button>
+                    <div class="text-center text-xs text-stone-500 mt-4">
+                      Sudah punya akun?{' '}
+                      <button type="button" onClick={() => { setIsRegisterMode(false); setAuthError(''); }} class="text-emerald-600 font-bold hover:underline">Masuk disini</button>
                     </div>
                   </form>
                 ) : (
+                  /* Login Form */
+                  <form onSubmit={handleLogin} class="space-y-4">
+                    <div>
+                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Username atau Email</label>
+                      <input 
+                        type="text" 
+                        required
+                        class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        placeholder="Masukkan Username atau Email"
+                        value={loginForm.username}
+                        onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Password</label>
+                      <input 
+                        type="password" 
+                        required
+                        class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        placeholder="••••••••"
+                        value={loginForm.password}
+                        onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                      />
+                    </div>
+                    
+                    <button 
+                      type="submit" 
+                      disabled={syncing}
+                      class="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-islamic-mint text-white font-bold transition-all transform active:scale-95 disabled:opacity-50"
+                    >
+                      {syncing ? <i class="fa-solid fa-spinner animate-spin"></i> : 'Masuk Aplikasi'}
+                    </button>
+
+                    <div class="text-center text-xs text-stone-500 mt-4">
+                      Belum memiliki akun?{' '}
+                      <button type="button" onClick={() => { setIsRegisterMode(true); setAuthError(''); }} class="text-emerald-600 font-bold hover:underline">Registrasi disini</button>
+                    </div>
+                  </form>
+                )}
+
+                {/* Database Set Helper on Login Screen */}
+                <div class="mt-6 pt-4 border-t border-stone-100 dark:border-stone-800 text-center">
+                  <button 
+                    onClick={() => {
+                      const inputUrl = prompt("Masukkan URL Google Apps Script Anda:", apiUrl);
+                      if (inputUrl !== null) {
+                        setApiUrl(inputUrl);
+                        localStorage.setItem('gas_api_url', inputUrl);
+                        alert("URL database berhasil disimpan!");
+                        window.location.reload();
+                      }
+                    }}
+                    class="text-xs font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl"
+                  >
+                    <i class="fa-solid fa-database mr-1"></i> Set URL Database
+                  </button>
+                </div>
+              </div>
+            </main>
+          ) : (
             /* Authenticated Application Panels with 8 Tabs */
             <main class="flex-grow max-w-4xl w-full mx-auto p-4 flex flex-col space-y-4">
               
@@ -1317,6 +1321,120 @@
                 </div>
               )}
 
+              {/* Tab 3: Quran Portal */}
+              {currentTab === 'quran' && (
+                <div class="space-y-4">
+                  {!selectedSurah ? (
+                    <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
+                      <div class="mb-4">
+                        <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100 flex items-center mb-2">
+                          <i class="fa-solid fa-book-open text-emerald-600 mr-2"></i> Portal Al-Quran & Terjemah
+                        </h4>
+                        <div class="relative">
+                          <input 
+                            type="text" 
+                            class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            placeholder="Cari surat (Contoh: Al-Fatihah, Ya-Sin)..."
+                            value={quranSearch}
+                            onChange={(e) => setQuranSearch(e.target.value)}
+                          />
+                          <i class="fa-solid fa-search text-stone-400 absolute left-3.5 top-3.5 text-xs"></i>
+                        </div>
+                      </div>
+
+                      {loadingQuran ? (
+                        <div class="text-center py-10">
+                          <i class="fa-solid fa-spinner animate-spin text-emerald-600 text-2xl"></i>
+                          <p class="text-xs text-stone-400 mt-2">Memuat data Al-Quran...</p>
+                        </div>
+                      ) : (
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto no-scrollbar">
+                          {quranSurahs
+                            .filter(surah => surah.englishName.toLowerCase().includes(quranSearch.toLowerCase()) || surah.name.includes(quranSearch))
+                            .map((surah) => (
+                              <button 
+                                key={surah.number}
+                                onClick={() => viewSurahDetails(surah.number)}
+                                class="p-3.5 rounded-2xl bg-stone-50/50 hover:bg-emerald-50/40 border border-stone-100 dark:bg-stone-800/25 dark:border-stone-800/40 text-left transition-all hover:scale-[1.01] flex items-center justify-between"
+                              >
+                                <div class="flex items-center space-x-3">
+                                  <span class="bg-emerald-600/10 text-emerald-600 font-bold w-7 h-7 flex items-center justify-center rounded-xl text-xs">{surah.number}</span>
+                                  <div>
+                                    <div class="font-bold text-xs">{surah.englishName}</div>
+                                    <div class="text-[10px] text-stone-400 uppercase tracking-widest">{surah.englishNameTranslation} ({surah.numberOfAyahs} Ayat)</div>
+                                  </div>
+                                </div>
+                                <div class="arabic-text text-lg text-emerald-700 font-bold">{surah.name}</div>
+                              </button>
+                            ))
+                          }
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    /* Surah Detail Ayah Viewer with FULL SURAH AUDIO PLAYER */
+                    <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
+                      <div class="flex items-center justify-between pb-3 border-b border-stone-100 dark:border-stone-800 mb-4 flex-wrap gap-2">
+                        <button 
+                          onClick={() => { setSelectedSurah(null); setSurahDetails(null); setIsPlayingFullSurah(false); if (audioRef.current) audioRef.current.pause(); }}
+                          class="text-xs text-emerald-600 font-bold flex items-center hover:underline"
+                        >
+                          <i class="fa-solid fa-arrow-left mr-1"></i> Kembali ke Daftar
+                        </button>
+
+                        <div class="flex items-center space-x-2">
+                          <button
+                            onClick={handlePlayFullSurah}
+                            class={`text-xs px-3 py-1.5 rounded-xl font-bold transition-all shadow-sm flex items-center ${isPlayingFullSurah ? 'bg-amber-500 text-white animate-pulse' : 'bg-emerald-700 text-white hover:bg-emerald-800'}`}
+                          >
+                            <i class={`fa-solid ${isPlayingFullSurah ? 'fa-pause' : 'fa-play-circle'} mr-1.5 text-sm`}></i>
+                            {isPlayingFullSurah ? 'Pause Full Surat' : 'Putar Full Surat'}
+                          </button>
+                          {surahDetails && (
+                            <div class="text-right">
+                              <h4 class="font-bold text-xs">{surahDetails.info.englishName}</h4>
+                              <p class="text-[10px] text-stone-400">{surahDetails.info.numberOfAyahs} Ayat</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {loadingQuran || !surahDetails ? (
+                        <div class="text-center py-10">
+                          <i class="fa-solid fa-spinner animate-spin text-emerald-600 text-2xl"></i>
+                          <p class="text-xs text-stone-400 mt-2">Memuat ayat...</p>
+                        </div>
+                      ) : (
+                        <div class="space-y-4 max-h-[500px] overflow-y-auto pr-2 no-scrollbar">
+                          {selectedSurah !== 1 && selectedSurah !== 9 && (
+                            <div class="text-center arabic-text text-xl py-4 text-emerald-800">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
+                          )}
+
+                          {surahDetails.verses.map((verse, vIdx) => (
+                            <div 
+                              key={verse.number} 
+                              class={`p-4 rounded-2xl border transition-all ${isPlayingFullSurah && currentFullSurahIndex === vIdx ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-500/35' : 'bg-stone-50 dark:bg-stone-800/40 border-stone-100/50 dark:border-stone-800/40'}`}
+                            >
+                              <div class="flex items-center justify-between">
+                                <span class="bg-emerald-600/10 text-emerald-600 font-bold text-[10px] w-6 h-6 flex items-center justify-center rounded-lg">{verse.number}</span>
+                                <button 
+                                  onClick={() => handlePlayAudio(verse.audio, verse.number)}
+                                  class={`text-xs p-2 rounded-xl transition-all ${playingAudio && playingAudio.id === verse.number && !isPlayingFullSurah ? 'bg-amber-500 text-white' : 'bg-emerald-600 text-white'}`}
+                                >
+                                  {playingAudio && playingAudio.id === verse.number && !isPlayingFullSurah ? <i class="fa-solid fa-pause"></i> : <i class="fa-solid fa-volume-high"></i>} Play Audio
+                                </button>
+                              </div>
+                              <div class="arabic-text text-right text-xl font-bold leading-loose text-slate-800 dark:text-stone-100 py-2">{verse.text}</div>
+                              <div class="text-stone-500 dark:text-stone-400 italic text-[11px] leading-relaxed mt-1 text-left">{verse.translation}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Tab: Radio Rodja */}
               {currentTab === 'radio' && (
                 <div class="space-y-4">
@@ -1331,7 +1449,7 @@
                 </div>
               )}
 
-              {/* Tab: Live Makkah */}
+              {/* Tab: Live Makk */}
               {currentTab === 'makkah' && (
                 <div class="space-y-4">
                   <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 flex flex-col">
@@ -1359,7 +1477,7 @@
                 </div>
               )}
 
-              {/* Tab 4: Informasi (NEW TAB) */}
+              {/* Tab 4: Informasi */}
               {currentTab === 'info' && (
                 <div class="space-y-4">
                   <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
