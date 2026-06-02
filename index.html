@@ -260,7 +260,7 @@
         if (!localUsers) {
           const defaultUsers = [
             { username: 'admin', email: 'admin@manicalendar.com', password: '123', role: 'admin' },
-            { username: 'rafliano', email: 'rafliano@school.id', password: '123', role: 'admin' },
+            { username: 'rafliano', email: 'raliano@school.id', password: '123', role: 'admin' },
             { username: 'guru1', email: 'guru@school.id', password: '123', role: 'user' }
           ];
           localStorage.setItem('local_users', JSON.stringify(defaultUsers));
@@ -582,7 +582,7 @@
       const handleSaveInfo = async (e) => {
         e.preventDefault();
         if (currentUser.role !== 'admin') {
-          alert('Hanya Administrator yang dapat menambahkan pengumuman informasi!');
+          alert('Hanya Administrator yang dapat menambahkan informasi!');
           return;
         }
 
@@ -1060,7 +1060,7 @@
                     <div class="p-5 border-b border-stone-100 dark:border-stone-800 flex items-center justify-between">
                       <div class="flex items-center space-x-2">
                         <i class="fa-solid fa-list-check text-emerald-600"></i>
-                        <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100">Daftar Rencana Kerja Sekolah Madrasah</h4>
+                        <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100">Rencana Kerja Madrasah</h4>
                       </div>
                       {currentUser.role === 'admin' && (
                         <button 
