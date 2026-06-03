@@ -64,7 +64,6 @@
     .arabic-text {
       font-family: 'Amiri', serif;
     }
-    /* Hide scrollbars but keep functionality */
     .no-scrollbar::-webkit-scrollbar {
       display: none;
     }
@@ -96,7 +95,6 @@
     const { useState, useEffect, useRef } = React;
 
     function App() {
-      // Configuration & Base States (URL set to default or saved)
       const defaultGasUrl = 'https://script.google.com/macros/s/AKfycbzkk8fFHljs71hmUqMnS8rCf6T5GuJ5iO1PglcybaSSXk9cAP1YnJCEkbfC9YOT67fLCw/exec';
       const [apiConnected, setApiConnected] = useState(false);
       const [apiUrl, setApiUrl] = useState(() => localStorage.getItem('gas_api_url') || defaultGasUrl);
@@ -104,7 +102,7 @@
         const saved = localStorage.getItem('active_user');
         return saved ? JSON.parse(saved) : null;
       });
-      const [currentTab, setCurrentTab] = useState('home'); // home | calendar | quran | radio | makkah | madinah | info | settings
+      const [currentTab, setCurrentTab] = useState('home'); 
       const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
       
       // Data States
@@ -113,9 +111,15 @@
       const [infos, setInfos] = useState([]);
       const [syncing, setSyncing] = useState(false);
       
-      // Pagination State for Todos (10 rows per page)
+      // Pagination State for Todos
       const [currentPage, setCurrentPage] = useState(1);
       const rowsPerPage = 10;
+
+      // Custom Alert Toast & Confirmation States (Replacing system alerts)
+      const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+      const [confirmModal, setConfirmModal] = useState({ isOpen: false, message: '', action: null });
+      const [isUrlModalOpen, setIsUrlModalOpen] = useState(false);
+      const [customUrlInput, setCustomUrlInput] = useState('');
 
       // Authentication States
       const [isRegisterMode, setIsRegisterMode] = useState(false);
@@ -155,18 +159,24 @@
       const [selectedSurah, setSelectedSurah] = useState(null);
       const [surahDetails, setSurahDetails] = useState(null);
       const [loadingQuran, setLoadingQuran] = useState(false);
-      const [playingAudio, setPlayingAudio] = useState(null); // { url, id }
+      const [playingAudio, setPlayingAudio] = useState(null); 
       const [quranSearch, setQuranSearch] = useState('');
       const [isPlayingFullSurah, setIsPlayingFullSurah] = useState(false);
       const [currentFullSurahIndex, setCurrentFullSurahIndex] = useState(0);
       
+      // New states for Range (Ayat Tertentu) Playback
+      const [quranPlayMode, setQuranPlayMode] = useState('full'); // 'full' | 'range'
+      const [startAyah, setStartAyah] = useState('');
+      const [endAyah, setEndAyah] = useState('');
+      const [isPlayingRange, setIsPlayingRange] = useState(false);
+      
       const audioRef = useRef(null);
 
-      // Static Backup/Demo Data (When API not configured or offline)
+      // Static Backup/Demo Data
       const fallbackTodos = [
         { id: '1', task: 'Ujian Tengah Semester Ganjil', subActivity: 'Persiapan lembar soal & pengawas madrasah', pic: 'Ust. Ahmad', startDate: '2026-06-01', endDate: '2026-06-05', progress: 50, createdBy: 'admin', keterangan: 'Soal sedang dicetak.' },
         { id: '2', task: 'Rapat Kerja Tahunan Madrasah', subActivity: 'Penyusunan anggaran belanja sekolah', pic: 'Bu Aminah', startDate: '2026-06-10', endDate: '2026-06-12', progress: 100, createdBy: 'admin', keterangan: 'Rapat berjalan lancar.' },
-        { id: '3', task: 'Penerimaan Santri Baru (PSB)', subActivity: 'Seleksi berkas & wawancara online', pic: 'Ust. Zulkifli', startDate: '2026-06-15', endDate: '2026-06-20', progress: 20, createdBy: 'admin', keterangan: '' }
+        { id: '3', task: 'Penerimaan Santri Baru (PSB)', subActivity: 'Seleksi berkas & wawancara online', pic: 'rafliano', startDate: '2026-06-15', endDate: '2026-06-20', progress: 20, createdBy: 'admin', keterangan: '' }
       ];
 
       const fallbackInfos = [
@@ -185,85 +195,107 @@
         localStorage.setItem('theme', theme);
       }, [theme]);
 
-      // Formatter function to format YYYY-MM-DD or ISO to dd-mm-yyyy
+      // Stop and reset audio whenever active tab changes to prevent overlapping
+      useEffect(() => {
+        if (audioRef.current) {
+          audioRef.current.pause();
+        }
+        setIsPlayingFullSurah(false);
+        setIsPlayingRange(false);
+        setPlayingAudio(null);
+      }, [currentTab]);
+
+      const showToast = (message, type = 'success') => {
+        setToast({ show: true, message, type });
+        setTimeout(() => {
+          setToast(prev => ({ ...prev, show: false }));
+        }, 4000);
+      };
+
+      const askConfirmation = (message, onConfirmAction) => {
+        setConfirmModal({
+          isOpen: true,
+          message,
+          action: () => {
+            onConfirmAction();
+            setConfirmModal({ isOpen: false, message: '', action: null });
+          }
+        });
+      };
+
+      const parseLocalDate = (dateStr) => {
+        if (!dateStr) return null;
+        try {
+          const str = dateStr.toString().trim();
+          
+          // Jika string merupakan format ISO dengan pembatas "T" (misal dari Database)
+          if (str.includes('T')) {
+            const d = new Date(str);
+            if (!isNaN(d.getTime())) return d;
+          }
+          
+          // Jika string merupakan format YYYY-MM-DD atau DD-MM-YYYY tanpa "T"
+          const parts = str.split(/[-/]/);
+          if (parts.length === 3) {
+            // Cek jika YYYY berada di bagian pertama (YYYY-MM-DD)
+            if (parts[0].length === 4) {
+              const y = parseInt(parts[0], 10);
+              const m = parseInt(parts[1], 10) - 1;
+              const d = parseInt(parts[2], 10);
+              return new Date(y, m, d);
+            }
+            // Cek jika YYYY berada di bagian terakhir (DD-MM-YYYY)
+            if (parts[2].length === 4) {
+              const y = parseInt(parts[2], 10);
+              const m = parseInt(parts[1], 10) - 1;
+              const d = parseInt(parts[0], 10);
+              return new Date(y, m, d);
+            }
+          }
+          
+          const fallbackD = new Date(str);
+          if (!isNaN(fallbackD.getTime())) return fallbackD;
+        } catch (e) {
+          console.error("Gagal melakukan parse tanggal lokal", e);
+        }
+        return null;
+      };
+
       const formatDateStr = (dateStr) => {
         if (!dateStr) return '';
-        try {
-          if (dateStr.toString().includes('T')) {
-            const rawYmd = dateStr.toString().split('T')[0];
-            const parts = rawYmd.split('-');
-            if (parts.length === 3) {
-              return `${parts[2]}-${parts[1]}-${parts[0]}`;
-            }
-          }
-          const d = new Date(dateStr);
-          if (isNaN(d.getTime())) {
-            if (dateStr.toString().includes('-')) {
-              const parts = dateStr.toString().split('-');
-              if (parts.length === 3) {
-                if (parts[0].length === 4) {
-                  return `${parts[2]}-${parts[1]}-${parts[0]}`;
-                }
-                if (parts[2].length === 4) {
-                  return `${parts[0]}-${parts[1]}-${parts[2]}`;
-                }
-              }
-            }
-            return dateStr;
-          }
-          const day = String(d.getDate()).padStart(2, '0');
-          const month = String(d.getMonth() + 1).padStart(2, '0');
-          const year = d.getFullYear();
-          return `${day}-${month}-${year}`;
-        } catch (e) {
-          return dateStr;
-        }
+        const d = parseLocalDate(dateStr);
+        if (!d) return dateStr;
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        return `${day}-${month}-${year}`;
       };
 
-      // Helper function to safely format any date format to exact YYYY-MM-DD for HTML input
       const formatToInputDate = (dateStr) => {
         if (!dateStr) return '';
-        try {
-          if (dateStr.toString().includes('T')) {
-            return dateStr.toString().split('T')[0];
-          }
-          if (dateStr.toString().includes('-')) {
-            const parts = dateStr.toString().split('-');
-            if (parts.length === 3) {
-              if (parts[2].length === 4) {
-                return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-              }
-              if (parts[0].length === 4) {
-                return dateStr;
-              }
-            }
-          }
-          const d = new Date(dateStr);
-          if (!isNaN(d.getTime())) {
-            const year = d.getFullYear();
-            const month = String(d.getMonth() + 1).padStart(2, '0');
-            const day = String(d.getDate()).padStart(2, '0');
-            return `${year}-${month}-${day}`;
-          }
-          return dateStr;
-        } catch (e) {
-          return dateStr;
-        }
+        const d = parseLocalDate(dateStr);
+        if (!d) return dateStr;
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
       };
 
-      // Handle Data Synchronization with Google Sheets API
       const syncWithCloud = async (urlToUse = apiUrl) => {
         if (!urlToUse || urlToUse === defaultGasUrl) {
           const localT = localStorage.getItem('local_todos');
           const localI = localStorage.getItem('local_infos');
+          const localU = localStorage.getItem('local_users');
           setTodos(localT ? JSON.parse(localT) : fallbackTodos);
           setInfos(localI ? JSON.parse(localI) : fallbackInfos);
+          if (localU) setUsers(JSON.parse(localU));
           setApiConnected(false);
           return;
         }
 
         setSyncing(true);
         try {
+          // Sync Agenda Rencana Kerja
           const todosRes = await fetch(`${urlToUse}?action=getTodos`);
           const todosData = await todosRes.json();
           if (todosData.status === 'success') {
@@ -274,18 +306,29 @@
             throw new Error(todosData.message);
           }
 
+          // Sync Papan Informasi
           const infoRes = await fetch(`${urlToUse}?action=getInfos`);
           const infoData = await infoRes.json();
           if (infoData.status === 'success') {
             setInfos(infoData.data);
             localStorage.setItem('local_infos', JSON.stringify(infoData.data));
           }
+
+          // Sync Data Pengguna (Untuk pic dropdown admin)
+          const usersRes = await fetch(`${urlToUse}?action=getUsers`);
+          const usersData = await usersRes.json();
+          if (usersData.status === 'success') {
+            setUsers(usersData.data);
+            localStorage.setItem('local_users', JSON.stringify(usersData.data));
+          }
         } catch (error) {
           console.warn('Sync failed, using offline cache.', error);
           const localT = localStorage.getItem('local_todos');
           const localI = localStorage.getItem('local_infos');
+          const localU = localStorage.getItem('local_users');
           setTodos(localT ? JSON.parse(localT) : fallbackTodos);
           setInfos(localI ? JSON.parse(localI) : fallbackInfos);
+          if (localU) setUsers(JSON.parse(localU));
           setApiConnected(false);
         } finally {
           setSyncing(false);
@@ -333,6 +376,9 @@
       const viewSurahDetails = async (surahNumber) => {
         setLoadingQuran(true);
         setIsPlayingFullSurah(false);
+        setIsPlayingRange(false);
+        setStartAyah('');
+        setEndAyah('');
         try {
           const resAr = await fetch(`https://api.alquran.cloud/v1/surah/${surahNumber}/editions/quran-uthmani,id.indonesian,ar.alafasy`);
           const data = await resAr.json();
@@ -357,6 +403,7 @@
 
       const handlePlayAudio = (audioUrl, verseId) => {
         setIsPlayingFullSurah(false);
+        setIsPlayingRange(false);
         if (playingAudio && playingAudio.id === verseId) {
           audioRef.current.pause();
           setPlayingAudio(null);
@@ -379,6 +426,7 @@
           setPlayingAudio(null);
         } else {
           setIsPlayingFullSurah(true);
+          setIsPlayingRange(false);
           playSurahVerse(0);
         }
       };
@@ -403,6 +451,62 @@
         audioRef.current.onended = () => {
           playSurahVerse(index + 1);
         };
+      };
+
+      // Play specific verse range recursively
+      const playSurahVerseRange = (currIndex, endIndex) => {
+        if (currIndex > endIndex || currIndex >= surahDetails.verses.length) {
+          setIsPlayingRange(false);
+          setPlayingAudio(null);
+          showToast('Selesai memutar rentang ayat pilihan!', 'success');
+          return;
+        }
+
+        const verse = surahDetails.verses[currIndex];
+        setCurrentFullSurahIndex(currIndex);
+
+        if (audioRef.current) {
+          audioRef.current.pause();
+        }
+
+        audioRef.current = new Audio(verse.audio);
+        audioRef.current.play();
+        setPlayingAudio({ url: verse.audio, id: verse.number });
+        audioRef.current.onended = () => {
+          playSurahVerseRange(currIndex + 1, endIndex);
+        };
+      };
+
+      // Unified playback handler based on active dropdown selection
+      const handleQuranPlayback = () => {
+        if (!surahDetails || surahDetails.verses.length === 0) return;
+
+        if (quranPlayMode === 'full') {
+          handlePlayFullSurah();
+        } else if (quranPlayMode === 'range') {
+          if (isPlayingRange) {
+            audioRef.current.pause();
+            setIsPlayingRange(false);
+            setPlayingAudio(null);
+          } else {
+            const startVal = parseInt(startAyah, 10);
+            const endVal = parseInt(endAyah, 10) || surahDetails.info.numberOfAyahs;
+            
+            // Validations for start & end ayahs
+            if (isNaN(startVal) || startVal < 1 || startVal > surahDetails.info.numberOfAyahs) {
+              showToast(`Nomor ayat awal tidak valid! (1 s/d ${surahDetails.info.numberOfAyahs})`, 'error');
+              return;
+            }
+            if (isNaN(endVal) || endVal < startVal || endVal > surahDetails.info.numberOfAyahs) {
+              showToast(`Nomor ayat akhir tidak valid! (${startVal} s/d ${surahDetails.info.numberOfAyahs})`, 'error');
+              return;
+            }
+
+            setIsPlayingRange(true);
+            setIsPlayingFullSurah(false);
+            playSurahVerseRange(startVal - 1, endVal - 1);
+          }
+        }
       };
 
       const handleRegister = async (e) => {
@@ -552,7 +656,7 @@
       const handleSaveActivity = async (e) => {
         e.preventDefault();
         if (currentUser.role !== 'admin') {
-          alert('Hanya Administrator yang dapat memanipulasi rencana kerja!');
+          showToast('Hanya Administrator yang dapat memanipulasi rencana kerja!', 'error');
           return;
         }
 
@@ -581,12 +685,13 @@
             const data = await res.json();
             if (data.status === 'success') {
               setIsModalOpen(false);
+              showToast('Rencana kerja berhasil disimpan!', 'success');
               syncWithCloud();
             } else {
-              alert('Gagal menyimpan aktivitas: ' + data.message);
+              showToast('Gagal menyimpan aktivitas: ' + data.message, 'error');
             }
           } catch (err) {
-            alert('Koneksi Cloud gagal. Disimpan ke penyimpanan lokal.');
+            showToast('Koneksi Cloud gagal. Disimpan ke penyimpanan lokal.', 'warning');
             saveActivityLocally(payload);
           } finally {
             setSyncing(false);
@@ -609,12 +714,13 @@
         setTodos(updatedList);
         localStorage.setItem('local_todos', JSON.stringify(updatedList));
         setIsModalOpen(false);
+        showToast('Tugas disimpan di penyimpanan lokal!', 'success');
       };
 
       const handleSaveInfo = async (e) => {
         e.preventDefault();
         if (currentUser.role !== 'admin') {
-          alert('Hanya Administrator yang dapat menambahkan pengumuman informasi!');
+          showToast('Hanya Administrator yang dapat menambahkan pengumuman informasi!', 'error');
           return;
         }
 
@@ -645,12 +751,13 @@
             if (data.status === 'success') {
               setIsInfoModalOpen(false);
               setInfoForm({ title: '', content: '' });
+              showToast('Pengumuman berhasil dipublikasikan!', 'success');
               syncWithCloud();
             } else {
-              alert('Gagal menyimpan informasi: ' + data.message);
+              showToast('Gagal menyimpan informasi: ' + data.message, 'error');
             }
           } catch (err) {
-            alert('Koneksi Cloud bermasalah. Disimpan secara lokal.');
+            showToast('Koneksi Cloud bermasalah. Disimpan secara lokal.', 'warning');
             saveInfoLocally(payload);
           } finally {
             setSyncing(false);
@@ -667,34 +774,36 @@
         localStorage.setItem('local_infos', JSON.stringify(updatedList));
         setIsInfoModalOpen(false);
         setInfoForm({ title: '', content: '' });
+        showToast('Informasi disimpan secara lokal!', 'success');
       };
 
-      const handleDeleteActivity = async (activityId) => {
-        if (!confirm('Apakah Anda yakin ingin menghapus rencana kerja ini?')) return;
-
-        if (apiUrl && apiUrl !== defaultGasUrl) {
-          setSyncing(true);
-          try {
-            const res = await fetch(apiUrl, {
-              method: 'POST',
-              mode: 'cors',
-              headers: { 'Content-Type': 'text/plain' },
-              body: JSON.stringify({ action: 'deleteTodo', id: activityId })
-            });
-            const data = await res.json();
-            if (data.status === 'success') {
-              syncWithCloud();
-            } else {
-              alert('Gagal menghapus dari Spreadsheet: ' + data.message);
+      const handleDeleteActivity = (activityId) => {
+        askConfirmation('Apakah Anda yakin ingin menghapus rencana kerja ini?', async () => {
+          if (apiUrl && apiUrl !== defaultGasUrl) {
+            setSyncing(true);
+            try {
+              const res = await fetch(apiUrl, {
+                method: 'POST',
+                mode: 'cors',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ action: 'deleteTodo', id: activityId })
+              });
+              const data = await res.json();
+              if (data.status === 'success') {
+                showToast('Agenda kerja terhapus!', 'success');
+                syncWithCloud();
+              } else {
+                showToast('Gagal menghapus dari Cloud: ' + data.message, 'error');
+              }
+            } catch (err) {
+              deleteActivityLocally(activityId);
+            } finally {
+              setSyncing(false);
             }
-          } catch (err) {
+          } else {
             deleteActivityLocally(activityId);
-          } finally {
-            setSyncing(false);
           }
-        } else {
-          deleteActivityLocally(activityId);
-        }
+        });
       };
 
       const deleteActivityLocally = (activityId) => {
@@ -702,34 +811,36 @@
         const updatedList = localList.filter(t => t.id.toString() !== activityId.toString());
         setTodos(updatedList);
         localStorage.setItem('local_todos', JSON.stringify(updatedList));
+        showToast('Agenda terhapus dari memori lokal!', 'success');
       };
 
-      const handleDeleteInfo = async (infoId) => {
-        if (!confirm('Apakah Anda yakin ingin menghapus informasi ini?')) return;
-
-        if (apiUrl && apiUrl !== defaultGasUrl) {
-          setSyncing(true);
-          try {
-            const res = await fetch(apiUrl, {
-              method: 'POST',
-              mode: 'cors',
-              headers: { 'Content-Type': 'text/plain' },
-              body: JSON.stringify({ action: 'deleteInfo', id: infoId })
-            });
-            const data = await res.json();
-            if (data.status === 'success') {
-              syncWithCloud();
-            } else {
-              alert('Gagal menghapus dari cloud: ' + data.message);
+      const handleDeleteInfo = (infoId) => {
+        askConfirmation('Apakah Anda yakin ingin menghapus pengumuman informasi ini?', async () => {
+          if (apiUrl && apiUrl !== defaultGasUrl) {
+            setSyncing(true);
+            try {
+              const res = await fetch(apiUrl, {
+                method: 'POST',
+                mode: 'cors',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ action: 'deleteInfo', id: infoId })
+              });
+              const data = await res.json();
+              if (data.status === 'success') {
+                showToast('Pengumuman terhapus dari cloud!', 'success');
+                syncWithCloud();
+              } else {
+                showToast('Gagal menghapus informasi: ' + data.message, 'error');
+              }
+            } catch (err) {
+              deleteInfoLocally(infoId);
+            } finally {
+              setSyncing(false);
             }
-          } catch (err) {
+          } else {
             deleteInfoLocally(infoId);
-          } finally {
-            setSyncing(false);
           }
-        } else {
-          deleteInfoLocally(infoId);
-        }
+        });
       };
 
       const deleteInfoLocally = (infoId) => {
@@ -737,6 +848,7 @@
         const updatedList = localList.filter(i => i.id.toString() !== infoId.toString());
         setInfos(updatedList);
         localStorage.setItem('local_infos', JSON.stringify(updatedList));
+        showToast('Pengumuman terhapus dari memori lokal!', 'success');
       };
 
       const handleMarkDone = async (activity) => {
@@ -762,6 +874,7 @@
             });
             const data = await res.json();
             if (data.status === 'success') {
+              showToast('Progress diperbarui ke 100%!', 'success');
               syncWithCloud();
             }
           } catch (err) {
@@ -841,10 +954,11 @@
             });
             const data = await res.json();
             if (data.status === 'success') {
+              showToast('Keterangan berhasil diperbarui!', 'success');
               syncWithCloud();
               setKeteranganModal({ isOpen: false, todo: null, text: '' });
             } else {
-              alert('Gagal menyimpan keterangan: ' + data.message);
+              showToast('Gagal menyimpan keterangan: ' + data.message, 'error');
             }
           } catch (err) {
             console.error('Penyimpanan cloud gagal, menyimpan lokal.', err);
@@ -863,7 +977,7 @@
         e.preventDefault();
         localStorage.setItem('gas_api_url', apiUrl);
         syncWithCloud(apiUrl);
-        alert('Tautan Google Apps Script berhasil diperbarui & sinkronisasi ulang!');
+        showToast('URL Google Apps Script berhasil diupdate!', 'success');
       };
 
       const getHijriDate = () => {
@@ -872,7 +986,6 @@
         return new Intl.DateTimeFormat('id-ID-u-ca-islamic-umalqura', options).format(today);
       };
 
-      // Urutkan semua rencana kerja secara kronologis (dari paling lama ke terbaru)
       const sortedTodos = [...todos].sort((a, b) => {
         const dateA = new Date(formatToInputDate(a.startDate));
         const dateB = new Date(formatToInputDate(b.startDate));
@@ -887,8 +1000,91 @@
       const totalPages = Math.ceil(sortedTodos.length / rowsPerPage);
 
       return (
-        <div class="flex-grow flex flex-col">
-          {/* Header Bar with High Contrast Logo wrapped in rounded White Box */}
+        <div class="flex-grow flex flex-col min-h-screen relative">
+          
+          {/* Custom Notification Toast Component */}
+          {toast.show && (
+            <div class="fixed top-20 right-4 z-50 animate-bounce">
+              <div class={`px-4 py-3 rounded-2xl shadow-2xl flex items-center space-x-3 text-white border ${
+                toast.type === 'success' ? 'bg-emerald-600 border-emerald-500' :
+                toast.type === 'error' ? 'bg-rose-600 border-rose-500' : 'bg-amber-500 border-amber-400'
+              }`}>
+                {toast.type === 'success' ? <i class="fa-solid fa-circle-check"></i> :
+                 toast.type === 'error' ? <i class="fa-solid fa-triangle-exclamation"></i> : <i class="fa-solid fa-circle-exclamation"></i>}
+                <span class="text-xs font-bold">{toast.message}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Custom Confirmation Modal */}
+          {confirmModal.isOpen && (
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <div class="w-full max-w-sm bg-white dark:bg-stone-900 rounded-3xl p-6 border border-stone-100 dark:border-stone-800 shadow-2xl text-center">
+                <div class="w-12 h-12 rounded-full bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto mb-3">
+                  <i class="fa-solid fa-circle-question text-xl"></i>
+                </div>
+                <h3 class="text-sm font-bold text-slate-800 dark:text-stone-100 mb-2">Konfirmasi Tindakan</h3>
+                <p class="text-xs text-stone-500 dark:text-stone-400 mb-6">{confirmModal.message}</p>
+                <div class="flex space-x-2">
+                  <button 
+                    onClick={() => setConfirmModal({ isOpen: false, message: '', action: null })}
+                    class="flex-1 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 text-xs font-bold text-stone-500 dark:text-stone-400 hover:bg-stone-50"
+                  >
+                    Batal
+                  </button>
+                  <button 
+                    onClick={confirmModal.action}
+                    class="flex-1 py-2.5 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 shadow-md"
+                  >
+                    Ya, Jalankan
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Custom URL database setup modal */}
+          {isUrlModalOpen && (
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <div class="w-full max-w-md bg-white dark:bg-stone-900 rounded-3xl p-6 border border-stone-100 dark:border-stone-800 shadow-2xl">
+                <h3 class="text-sm font-bold text-slate-800 dark:text-stone-100 mb-2 flex items-center">
+                  <i class="fa-solid fa-database text-emerald-600 mr-2"></i> Pengaturan URL Database
+                </h3>
+                <p class="text-xs text-stone-500 dark:text-stone-400 mb-4">Masukkan tautan Web API Google Apps Script Anda untuk mengaktifkan sinkronisasi Cloud.</p>
+                
+                <input 
+                  type="url"
+                  class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950 text-xs focus:outline-none mb-4"
+                  placeholder="https://script.google.com/macros/s/.../exec"
+                  value={customUrlInput}
+                  onChange={(e) => setCustomUrlInput(e.target.value)}
+                />
+                
+                <div class="flex space-x-2">
+                  <button 
+                    onClick={() => setIsUrlModalOpen(false)}
+                    class="flex-1 py-2.5 rounded-xl border border-stone-200 text-xs font-bold text-stone-500"
+                  >
+                    Tutup
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setApiUrl(customUrlInput);
+                      localStorage.setItem('gas_api_url', customUrlInput);
+                      setIsUrlModalOpen(false);
+                      showToast('Database URL berhasil disimpan!', 'success');
+                      window.location.reload();
+                    }}
+                    class="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700"
+                  >
+                    Simpan & Terapkan
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {}
           <header class="bg-islamic-dark text-white px-4 py-3 sticky top-0 z-30 shadow-md flex items-center justify-between">
             <div class="flex items-center space-x-2.5">
               <div class="bg-white p-1 rounded-xl flex items-center justify-center shadow-sm w-10 h-10 overflow-hidden">
@@ -932,6 +1128,7 @@
             </div>
           </header>
 
+          {}
           {!currentUser ? (
             <main class="flex-grow flex items-center justify-center p-4">
               <div class="w-full max-w-md glass-card rounded-3xl shadow-2xl overflow-hidden p-6 border transition-all relative">
@@ -1047,13 +1244,8 @@
                 <div class="mt-6 pt-4 border-t border-stone-100 dark:border-stone-800 text-center">
                   <button 
                     onClick={() => {
-                      const inputUrl = prompt("Masukkan URL Google Apps Script Anda:", apiUrl);
-                      if (inputUrl !== null) {
-                        setApiUrl(inputUrl);
-                        localStorage.setItem('gas_api_url', inputUrl);
-                        alert("URL database berhasil disimpan!");
-                        window.location.reload();
-                      }
+                      setCustomUrlInput(apiUrl);
+                      setIsUrlModalOpen(true);
                     }}
                     class="text-xs font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl"
                   >
@@ -1063,7 +1255,7 @@
               </div>
             </main>
           ) : (
-            <main class="flex-grow max-w-4xl w-full mx-auto p-4 flex flex-col space-y-4">
+            <main class="flex-grow max-w-4xl w-full mx-auto p-4 flex flex-col space-y-4 pb-24">
               <div class="flex overflow-x-auto no-scrollbar bg-white dark:bg-stone-900 p-1.5 rounded-2xl shadow-sm border border-stone-100 dark:border-stone-800 space-x-1">
                 <button 
                   onClick={() => { setCurrentTab('home'); setCurrentPage(1); }}
@@ -1115,6 +1307,7 @@
                 </button>
               </div>
 
+              {}
               {currentTab === 'home' && (
                 <div class="space-y-4">
                   <div class="sholat-card text-white p-6 rounded-3xl relative overflow-hidden shadow-xl">
@@ -1282,6 +1475,7 @@
                 </div>
               )}
 
+              {}
               {currentTab === 'calendar' && (
                 <div class="space-y-4">
                   {currentUser.role === 'admin' ? (
@@ -1341,6 +1535,7 @@
                 </div>
               )}
 
+              {}
               {currentTab === 'quran' && (
                 <div class="space-y-4">
                   {!selectedSurah ? (
@@ -1392,26 +1587,84 @@
                     </div>
                   ) : (
                     <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
-                      <div class="flex items-center justify-between pb-3 border-b border-stone-100 dark:border-stone-800 mb-4 flex-wrap gap-2">
+                      {}
+                      <div class="flex items-center justify-between pb-3 border-b border-stone-100 dark:border-stone-800 mb-4 flex-wrap gap-4">
                         <button 
-                          onClick={() => { setSelectedSurah(null); setSurahDetails(null); setIsPlayingFullSurah(false); if (audioRef.current) audioRef.current.pause(); }}
+                          onClick={() => { setSelectedSurah(null); setSurahDetails(null); setIsPlayingFullSurah(false); setIsPlayingRange(false); setStartAyah(''); setEndAyah(''); if (audioRef.current) audioRef.current.pause(); }}
                           class="text-xs text-emerald-600 font-bold flex items-center hover:underline"
                         >
                           <i class="fa-solid fa-arrow-left mr-1"></i> Kembali ke Daftar
                         </button>
 
-                        <div class="flex items-center space-x-2">
-                          <button
-                            onClick={handlePlayFullSurah}
-                            class={`text-xs px-3 py-1.5 rounded-xl font-bold transition-all shadow-sm flex items-center ${isPlayingFullSurah ? 'bg-amber-500 text-white animate-pulse' : 'bg-emerald-700 text-white hover:bg-emerald-800'}`}
-                          >
-                            <i class={`fa-solid ${isPlayingFullSurah ? 'fa-pause' : 'fa-play-circle'} mr-1.5 text-sm`}></i>
-                            {isPlayingFullSurah ? 'Pause Full Surat' : 'Putar Full Surat'}
-                          </button>
+                        <div class="flex items-center space-x-3 flex-wrap gap-2">
+                          {/* Range Playback controls */}
+                          <div class="flex items-center space-x-2 flex-wrap bg-stone-50 dark:bg-stone-800/50 p-2 rounded-2xl border border-stone-100 dark:border-stone-800">
+                            <div class="flex flex-col">
+                              <label class="text-[9px] font-bold text-stone-400 uppercase tracking-wider mb-0.5 px-1">Opsi Putar</label>
+                              <select 
+                                value={quranPlayMode}
+                                onChange={(e) => {
+                                  setQuranPlayMode(e.target.value);
+                                  if (audioRef.current) {
+                                    audioRef.current.pause();
+                                  }
+                                  setIsPlayingFullSurah(false);
+                                  setIsPlayingRange(false);
+                                  setPlayingAudio(null);
+                                }}
+                                class="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs rounded-xl px-2.5 py-1.5 font-bold text-slate-800 dark:text-stone-200 focus:outline-none"
+                              >
+                                <option value="full">Putar Full Surat</option>
+                                <option value="range">Putar Ayat Tertentu</option>
+                              </select>
+                            </div>
+
+                            {quranPlayMode === 'range' && (
+                              <div class="flex items-center space-x-1.5">
+                                <div class="flex flex-col">
+                                  <label class="text-[9px] font-bold text-stone-400 uppercase tracking-wider mb-0.5 px-1">Ayat Awal</label>
+                                  <input 
+                                    type="number"
+                                    min="1"
+                                    max={surahDetails?.info.numberOfAyahs}
+                                    value={startAyah}
+                                    onChange={(e) => setStartAyah(e.target.value)}
+                                    placeholder="1"
+                                    class="w-16 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs rounded-xl px-2 py-1.5 text-center font-bold text-slate-800 dark:text-stone-200 focus:ring-1 focus:ring-emerald-500 outline-none"
+                                  />
+                                </div>
+                                <div class="flex flex-col">
+                                  <label class="text-[9px] font-bold text-stone-400 uppercase tracking-wider mb-0.5 px-1">Ayat Akhir</label>
+                                  <input 
+                                    type="number"
+                                    min="1"
+                                    max={surahDetails?.info.numberOfAyahs}
+                                    value={endAyah}
+                                    onChange={(e) => setEndAyah(e.target.value)}
+                                    placeholder={surahDetails?.info.numberOfAyahs}
+                                    class="w-16 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs rounded-xl px-2 py-1.5 text-center font-bold text-slate-800 dark:text-stone-200 focus:ring-1 focus:ring-emerald-500 outline-none"
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            <button
+                              onClick={handleQuranPlayback}
+                              class={`text-xs px-4 py-2 rounded-xl font-bold transition-all shadow-sm flex items-center self-end ${
+                                (isPlayingFullSurah || isPlayingRange) 
+                                  ? 'bg-amber-500 text-white animate-pulse' 
+                                  : 'bg-emerald-700 text-white hover:bg-emerald-800'
+                              }`}
+                            >
+                              <i class={`fa-solid ${(isPlayingFullSurah || isPlayingRange) ? 'fa-pause' : 'fa-play'} mr-1.5 text-xs`}></i>
+                              {(isPlayingFullSurah || isPlayingRange) ? 'Pause' : 'Putar'}
+                            </button>
+                          </div>
+
                           {surahDetails && (
                             <div class="text-right">
-                              <h4 class="font-bold text-xs">{surahDetails.info.englishName}</h4>
-                              <p class="text-[10px] text-stone-400">{surahDetails.info.numberOfAyahs} Ayat</p>
+                              <h4 class="font-bold text-xs text-slate-800 dark:text-stone-100">{surahDetails.info.englishName}</h4>
+                              <p class="text-[10px] text-stone-400 font-semibold">{surahDetails.info.numberOfAyahs} Ayat</p>
                             </div>
                           )}
                         </div>
@@ -1431,15 +1684,15 @@
                           {surahDetails.verses.map((verse, vIdx) => (
                             <div 
                               key={verse.number} 
-                              class={`p-4 rounded-2xl border transition-all ${isPlayingFullSurah && currentFullSurahIndex === vIdx ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-500/35' : 'bg-stone-50 dark:bg-stone-800/40 border-stone-100/50 dark:border-stone-800/40'}`}
+                              class={`p-4 rounded-2xl border transition-all ${(isPlayingFullSurah || isPlayingRange) && currentFullSurahIndex === vIdx ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-500/35' : 'bg-stone-50 dark:bg-stone-800/40 border-stone-100/50 dark:border-stone-800/40'}`}
                             >
                               <div class="flex items-center justify-between">
                                 <span class="bg-emerald-600/10 text-emerald-600 font-bold text-[10px] w-6 h-6 flex items-center justify-center rounded-lg">{verse.number}</span>
                                 <button 
                                   onClick={() => handlePlayAudio(verse.audio, verse.number)}
-                                  class={`text-xs p-2 rounded-xl transition-all ${playingAudio && playingAudio.id === verse.number && !isPlayingFullSurah ? 'bg-amber-500 text-white' : 'bg-emerald-600 text-white'}`}
+                                  class={`text-xs p-2 rounded-xl transition-all ${playingAudio && playingAudio.id === verse.number && !isPlayingFullSurah && !isPlayingRange ? 'bg-amber-500 text-white' : 'bg-emerald-600 text-white'}`}
                                 >
-                                  {playingAudio && playingAudio.id === verse.number && !isPlayingFullSurah ? <i class="fa-solid fa-pause"></i> : <i class="fa-solid fa-volume-high"></i>} Play Audio
+                                  {playingAudio && playingAudio.id === verse.number && !isPlayingFullSurah && !isPlayingRange ? <i class="fa-solid fa-pause"></i> : <i class="fa-solid fa-volume-high"></i>} Play Audio
                                 </button>
                               </div>
                               <div class="arabic-text text-right text-xl font-bold leading-loose text-slate-800 dark:text-stone-100 py-2">{verse.text}</div>
@@ -1492,6 +1745,7 @@
                 </div>
               )}
 
+              {}
               {currentTab === 'info' && (
                 <div class="space-y-4">
                   <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
@@ -1543,6 +1797,7 @@
                 </div>
               )}
 
+              {}
               {currentTab === 'settings' && (
                 <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
                   <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100 flex items-center mb-4">
@@ -1569,7 +1824,7 @@
                     <div class="flex space-x-2">
                       <button 
                         type="submit" 
-                        class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs py-3 rounded-xl font-bold transition-all"
+                        class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs py-3 rounded-xl font-bold transition-all animate-pulse"
                       >
                         <i class="fa-solid fa-cloud-arrow-up mr-1"></i> Simpan URL & Update
                       </button>
@@ -1589,6 +1844,7 @@
             </main>
           )}
 
+          {}
           {isModalOpen && (
             <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
               <div class="w-full max-w-md bg-white dark:bg-stone-900 rounded-3xl shadow-2xl border border-stone-100 dark:border-stone-800 overflow-hidden p-6 relative">
@@ -1629,16 +1885,27 @@
                     />
                   </div>
 
+                  {/* Penanggung Jawab (PIC) - Dropdown Select of Users with role 'admin' */}
                   <div>
                     <label class="block text-[10px] font-bold uppercase text-stone-400 mb-1">Penanggung Jawab (PIC)</label>
-                    <input 
-                      type="text"
+                    <select 
                       required
-                      class="w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                      placeholder="Nama User / Guru"
+                      class="w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-800 dark:text-stone-200"
                       value={activityForm.pic}
                       onChange={(e) => setActivityForm({ ...activityForm, pic: e.target.value })}
-                    />
+                    >
+                      <option value="">-- Pilih PIC (Admin) --</option>
+                      {users
+                        .filter(u => u.role === 'admin')
+                        .map(u => (
+                          <option key={u.username} value={u.username}>{u.username}</option>
+                        ))
+                      }
+                      {/* Fallback option jika PIC bernilai string di luar list admin */}
+                      {activityForm.pic && !users.some(u => u.username === activityForm.pic && u.role === 'admin') && (
+                        <option value={activityForm.pic}>{activityForm.pic}</option>
+                      )}
+                    </select>
                   </div>
 
                   <div class="grid grid-cols-2 gap-2">
@@ -1681,7 +1948,7 @@
 
                   <button 
                     type="submit" 
-                    class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-islamic-mint text-white font-bold transition-all"
+                    class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-islamic-mint text-white font-bold transition-all shadow-lg"
                   >
                     <i class="fa-solid fa-save mr-1"></i> Simpan Agenda Kerja
                   </button>
@@ -1690,6 +1957,7 @@
             </div>
           )}
 
+          {}
           {isInfoModalOpen && (
             <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
               <div class="w-full max-w-md bg-white dark:bg-stone-900 rounded-3xl shadow-2xl border border-stone-100 dark:border-stone-800 overflow-hidden p-6 relative">
@@ -1739,7 +2007,7 @@
 
                   <button 
                     type="submit" 
-                    class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-islamic-mint text-white font-bold transition-all"
+                    class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-islamic-mint text-white font-bold transition-all shadow-lg"
                   >
                     <i class="fa-solid fa-paper-plane mr-1"></i> Publikasikan Informasi
                   </button>
@@ -1748,6 +2016,7 @@
             </div>
           )}
 
+          {}
           {keteranganModal.isOpen && keteranganModal.todo && (
             <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
               <div class="w-full max-w-md bg-white dark:bg-stone-900 rounded-3xl shadow-2xl border border-stone-100 dark:border-stone-800 overflow-hidden p-6 relative">
@@ -1785,7 +2054,7 @@
 
                     <button 
                       type="submit" 
-                      class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-islamic-mint text-white font-bold transition-all"
+                      class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-islamic-mint text-white font-bold transition-all shadow-lg"
                     >
                       <i class="fa-solid fa-save mr-1"></i> Simpan Keterangan
                     </button>
@@ -1814,17 +2083,3 @@
   </script>
 </body>
 </html>
-```
-
----
-
-### Langkah Penanganan Sederhana di Browser Anda
-
-Sering kali setelah perbaikan sistem, browser uji coba lama Anda masih menyimpan cache data lama dari modal keterangan yang rusak. Silakan lakukan **pembersihan cache lokal cepat** dengan cara berikut:
-
-1. Buka situs website Anda `https://ovick-omars.github.io/manicalendar/` di laptop.
-2. Tekan tombol **F12** pada keyboard untuk membuka menu developer tool.
-3. Klik tab **Console** di bagian atas panel F12 tersebut.
-4. Salin dan tempelkan perintah di bawah ini, lalu tekan **Enter**:
-   ```javascript
-   localStorage.clear();
