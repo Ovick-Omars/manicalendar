@@ -348,7 +348,7 @@
         if (!localUsers) {
           const defaultUsers = [
             { username: 'admin', email: 'admin@manicalendar.com', password: '123', role: 'admin' },
-            { username: 'rafliano', email: 'rafliano@school.id', password: '123', role: 'admin' },
+            { username: 'rafliano', email: 'rafli@school.id', password: '123', role: 'admin' },
             { username: 'guru1', email: 'guru@school.id', password: '123', role: 'user' }
           ];
           localStorage.setItem('local_users', JSON.stringify(defaultUsers));
@@ -656,7 +656,7 @@
       const handleSaveActivity = async (e) => {
         e.preventDefault();
         if (currentUser.role !== 'admin') {
-          showToast('Hanya Administrator yang dapat memanipulasi rencana kerja!', 'error');
+          showToast('Hanya Administrator yang dapat merubah rencana kerja!', 'error');
           return;
         }
 
@@ -720,7 +720,7 @@
       const handleSaveInfo = async (e) => {
         e.preventDefault();
         if (currentUser.role !== 'admin') {
-          showToast('Hanya Administrator yang dapat menambahkan pengumuman informasi!', 'error');
+          showToast('Hanya Administrator yang dapat menambahkan informasi!', 'error');
           return;
         }
 
@@ -1136,8 +1136,8 @@
                   <div class="inline-block bg-islamic-mint text-islamic-gold p-4 rounded-3xl mb-3 shadow-inner">
                     <i class="fa-solid fa-calendar-check text-3xl"></i>
                   </div>
-                  <h2 class="text-2xl font-extrabold text-islamic-dark dark:text-stone-100">Selamat Datang di ManiCalendar</h2>
-                  <p class="text-xs text-stone-500 dark:text-stone-400 mt-1">Platform Manajemen Aktivitas & Agenda Harian Madrasah Modern</p>
+                  <h2 class="text-2xl font-extrabold text-islamic-dark dark:text-stone-100">Selamat Datang di manICalendar</h2>
+                  <p class="text-xs text-stone-500 dark:text-stone-400 mt-1">Platform Manajemen & Agenda Madrasah </p>
                 </div>
 
                 {authError && (
@@ -1360,7 +1360,7 @@
                     <div class="p-5 border-b border-stone-100 dark:border-stone-800 flex items-center justify-between">
                       <div class="flex items-center space-x-2">
                         <i class="fa-solid fa-list-check text-emerald-600"></i>
-                        <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100">Daftar Rencana Kerja Sekolah Madrasah</h4>
+                        <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100">Daftar Rencana Kerja Madrasah</h4>
                       </div>
                       {currentUser.role === 'admin' && (
                         <button 
@@ -1950,7 +1950,7 @@
                     type="submit" 
                     class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-islamic-mint text-white font-bold transition-all shadow-lg"
                   >
-                    <i class="fa-solid fa-save mr-1"></i> Simpan Agenda Kerja
+                    <i class="fa-solid fa-save mr-1"></i> Simpan rencana Kerja
                   </button>
                 </form>
               </div>
