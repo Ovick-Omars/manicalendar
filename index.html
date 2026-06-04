@@ -283,16 +283,14 @@
         if (!ts) return '';
         try {
           const tsStr = ts.toString().trim();
-          if (tsStr.includes('T') || tsStr.includes('Z')) {
-            const d = new Date(tsStr);
-            if (!isNaN(d.getTime())) {
-              const day = String(d.getDate()).padStart(2, '0');
-              const month = String(d.getMonth() + 1).padStart(2, '0');
-              const year = d.getFullYear();
-              const hours = String(d.getHours()).padStart(2, '0');
-              const minutes = String(d.getMinutes()).padStart(2, '0');
-              return `${day}-${month}-${year} ${hours}:${minutes}`;
-            }
+          const d = new Date(tsStr);
+          if (!isNaN(d.getTime())) {
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
+            const hours = String(d.getHours()).padStart(2, '0');
+            const minutes = String(d.getMinutes()).padStart(2, '0');
+            return `${day}-${month}-${year} ${hours}:${minutes}`;
           }
           return tsStr;
         } catch (e) {
@@ -368,7 +366,7 @@
             setQuranSurahs(data.data);
           }
         } catch (err) {
-          console.error("Gagal memuat surat Al-Quran", err);
+          console.error("Gagal memuat daftar Al-Quran", err);
           showToast("Gagal memuat daftar Al-Quran", "error");
         } finally {
           setLoadingQuran(false);
@@ -421,7 +419,7 @@
         }
       };
 
-      // Endless loop Full Surah
+      // Loop mode: Play full surah endlessly (infinite repeat)
       const handlePlayFullSurah = () => {
         if (!surahDetails || surahDetails.verses.length === 0) return;
         if (isPlayingFullSurah) {
@@ -438,7 +436,7 @@
       const playSurahVerse = (index) => {
         if (!isPlayingFullSurah) return;
         if (index >= surahDetails.verses.length) {
-          // Loop back to first verse endlessly
+          // Loop back to the first verse (index 0) endlessly
           playSurahVerse(0);
           return;
         }
@@ -458,14 +456,14 @@
         };
       };
 
-      // Endless loop range of verses
+      // Loop mode: Play specific range of verses endlessly (infinite repeat)
       const playSurahVerseRange = (currIndex, endIndex) => {
         if (!isPlayingRange) return;
         const startVal = parseInt(startAyah, 10) || 1;
         const endVal = parseInt(endAyah, 10) || surahDetails.info.numberOfAyahs;
 
         if (currIndex > endIndex || currIndex >= surahDetails.verses.length) {
-          // Loop back to start of the range endlessly
+          // Loop back to the start of the range endlessly
           playSurahVerseRange(startVal - 1, endVal - 1);
           return;
         }
@@ -742,9 +740,7 @@
         }
 
         const now = new Date();
-        const dateStr = formatDateStr(now.toISOString().split('T')[0]);
-        const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-        const timestamp = `${now.toISOString()}`; // store ISO globally, parser formats local
+        const timestamp = `${now.toISOString()}`; 
 
         const payload = {
           action: 'saveInfo',
@@ -1154,6 +1150,7 @@
             </div>
           </header>
 
+          {}
           {/* Authentication Overlay if user is not logged in */}
           {!currentUser ? (
             <main className="flex-grow flex items-center justify-center p-4">
@@ -1162,8 +1159,8 @@
                   <div className="inline-block bg-islamic-mint text-islamic-gold p-4 rounded-3xl mb-3 shadow-inner">
                     <i className="fa-solid fa-calendar-check text-3xl"></i>
                   </div>
-                  <h2 className="text-2xl font-extrabold text-islamic-dark dark:text-stone-100">Selamat Datang di manICalendar</h2>
-                  <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">Manajemen Aktivitas & Agenda Harian Madrasah</p>
+                  <h2 className="text-2xl font-extrabold text-islamic-dark dark:text-stone-100">Selamat Datang di ManiCalendar</h2>
+                  <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">Platform Manajemen Aktivitas & Agenda Harian Madrasah Modern</p>
                 </div>
 
                 {authError && (
@@ -1217,7 +1214,7 @@
                         <button 
                           type="button" 
                           onClick={() => setShowRegPassword(!showRegPassword)}
-                          className="absolute right-3 top-3.5 text-stone-450 hover:text-stone-600 dark:hover:text-white"
+                          className="absolute right-3 top-3.5 text-stone-400 hover:text-stone-600 dark:hover:text-white"
                         >
                           <i className={`fa-solid ${showRegPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
                         </button>
@@ -1265,7 +1262,7 @@
                         <button 
                           type="button" 
                           onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-3.5 text-stone-450 hover:text-stone-600 dark:hover:text-white"
+                          className="absolute right-3 top-3.5 text-stone-400 hover:text-stone-600 dark:hover:text-white"
                         >
                           <i className={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
                         </button>
@@ -1302,6 +1299,8 @@
             </main>
           ) : (
             <main className="flex-grow max-w-4xl w-full mx-auto p-4 flex flex-col space-y-4 pb-24">
+              
+              {}
               <div className="flex overflow-x-auto no-scrollbar bg-white dark:bg-stone-900 p-1.5 rounded-2xl shadow-sm border border-stone-100 dark:border-stone-800 space-x-1">
                 <button 
                   onClick={() => { setCurrentTab('home'); setCurrentPage(1); }}
@@ -1353,6 +1352,7 @@
                 </button>
               </div>
 
+              {}
               {/* HOME TAB CONTENT */}
               {currentTab === 'home' && (
                 <div className="space-y-4">
@@ -1408,7 +1408,7 @@
                     <div className="p-5 border-b border-stone-100 dark:border-stone-800 flex items-center justify-between">
                       <div className="flex items-center space-x-2">
                         <i className="fa-solid fa-list-check text-emerald-600"></i>
-                        <h4 className="font-bold text-sm text-islamic-dark dark:text-stone-100">Rencana Kerja Madrasah</h4>
+                        <h4 className="font-bold text-sm text-islamic-dark dark:text-stone-100">Daftar Rencana Kerja Sekolah Madrasah</h4>
                       </div>
                       {currentUser.role === 'admin' && (
                         <button 
@@ -1523,6 +1523,7 @@
                 </div>
               )}
 
+              {}
               {/* CALENDAR TAB CONTENT */}
               {currentTab === 'calendar' && (
                 <div className="space-y-4">
@@ -1583,8 +1584,8 @@
                 </div>
               )}
 
-              {/* QURAN TAB CONTENT WITH NEW DROPDOWN MODE AND ADVANCED QARI LIST */}
               {}
+              {/* QURAN TAB CONTENT WITH NEW DROPDOWN MODE AND ADVANCED QARI LIST */}
               {currentTab === 'quran' && (
                 <div className="space-y-4">
                   {!selectedSurah ? (
@@ -2042,7 +2043,7 @@
                     type="submit" 
                     className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-islamic-mint text-white font-bold transition-all shadow-lg"
                   >
-                    <i className="fa-solid fa-save mr-1"></i> Simpan Rencana Kerja
+                    <i className="fa-solid fa-save mr-1"></i> Simpan Agenda Kerja
                   </button>
                 </form>
               </div>
