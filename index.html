@@ -114,7 +114,7 @@
       const [currentPage, setCurrentPage] = useState(1);
       const rowsPerPage = 10;
 
-      // Toast Notification States (Replacing standard browser alerts)
+      // Toast Notification States
       const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
       const [confirmModal, setConfirmModal] = useState({ isOpen: false, message: '', action: null });
       const [isUrlModalOpen, setIsUrlModalOpen] = useState(false);
@@ -190,14 +190,14 @@
 
       // Static Backup/Demo Data
       const fallbackTodos = [
-        { id: '1', task: 'Ujian Tengah Semester Ganjil', subActivity: 'Persiapan lembar soal & pengawas madrasah', pic: 'Ust. Ahmad', startDate: '2026-06-01', endDate: '2026-06-05', progress: 50, createdBy: 'admin', keterangan: 'Soal sedang dicetak.' },
-        { id: '2', task: 'Rapat Kerja Tahunan Madrasah', subActivity: 'Penyusunan anggaran belanja sekolah', pic: 'Bu Aminah', startDate: '2026-06-10', endDate: '2026-06-12', progress: 100, createdBy: 'admin', keterangan: 'Rapat berjalan lancar.' },
+        { id: '1', task: 'Ujian Tengah Semester Ganjil', subActivity: 'Persiapan lembar soal & pengawas madrasah', pic: 'admin', startDate: '2026-06-01', endDate: '2026-06-05', progress: 50, createdBy: 'admin', keterangan: 'Soal sedang dicetak.' },
+        { id: '2', task: 'Rapat Kerja Tahunan Madrasah', subActivity: 'Penyusunan anggaran belanja sekolah', pic: 'rafliano', startDate: '2026-06-10', endDate: '2026-06-12', progress: 100, createdBy: 'admin', keterangan: 'Rapat berjalan lancar.' },
         { id: '3', task: 'Penerimaan Santri Baru (PSB)', subActivity: 'Seleksi berkas & wawancara online', pic: 'rafliano', startDate: '2026-06-15', endDate: '2026-06-20', progress: 20, createdBy: 'admin', keterangan: '' }
       ];
 
       const fallbackInfos = [
-        { id: '1', title: 'Persiapan Ujian Semester', content: 'Diharapkan seluruh asatidzah mempersiapkan naskah soal ujian paling lambat akhir minggu ini.', timestamp: '01-06-2026 09:15', createdBy: 'rafliano' },
-        { id: '2', title: 'Kebersihan Lingkungan Madrasah', content: 'Kerja bakti rutin hari Jumat akan difokuskan pada area halaman depan dan ruang kelas baru.', timestamp: '01-06-2026 10:30', createdBy: 'admin' }
+        { id: '1', title: 'Persiapan Ujian Semester', content: 'Diharapkan seluruh asatidzah mempersiapkan naskah soal ujian paling lambat akhir minggu ini.', timestamp: '2026-06-01T09:15:00.000Z', createdBy: 'rafliano' },
+        { id: '2', title: 'Kebersihan Lingkungan Madrasah', content: 'Kerja bakti rutin hari Jumat akan difokuskan pada area halaman depan dan ruang kelas baru.', timestamp: '2026-06-01T10:30:00.000Z', createdBy: 'admin' }
       ];
 
       useEffect(() => {
@@ -228,27 +228,26 @@
         });
       };
 
+      // Safely parse date ensuring NO zone offset deduction (anti-back-one-day bug)
       const parseLocalDate = (dateStr) => {
         if (!dateStr) return null;
         try {
           const str = dateStr.toString().trim();
+          // If ISO format (contains T), separate date parts manually to avoid time zone shift
           if (str.includes('T')) {
-            const d = new Date(str);
-            if (!isNaN(d.getTime())) return d;
+            const rawYmd = str.split('T')[0];
+            const parts = rawYmd.split('-');
+            if (parts.length === 3) {
+              return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+            }
           }
           const parts = str.split(/[-/]/);
           if (parts.length === 3) {
             if (parts[0].length === 4) {
-              const y = parseInt(parts[0], 10);
-              const m = parseInt(parts[1], 10) - 1;
-              const d = parseInt(parts[2], 10);
-              return new Date(y, m, d);
+              return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
             }
             if (parts[2].length === 4) {
-              const y = parseInt(parts[2], 10);
-              const m = parseInt(parts[1], 10) - 1;
-              const d = parseInt(parts[0], 10);
-              return new Date(y, m, d);
+              return new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
             }
           }
           const fallbackD = new Date(str);
@@ -360,6 +359,22 @@
         loadQuranSurahs();
       }, [apiUrl]);
 
+      const loadQuranSurahs = async () => {
+        setLoadingQuran(true);
+        try {
+          const res = await fetch('https://api.alquran.cloud/v1/surah');
+          const data = await res.json();
+          if (data.code === 200) {
+            setQuranSurahs(data.data);
+          }
+        } catch (err) {
+          console.error("Gagal memuat surat Al-Quran", err);
+          showToast("Gagal memuat daftar Al-Quran", "error");
+        } finally {
+          setLoadingQuran(false);
+        }
+      };
+
       const viewSurahDetails = async (surahNumber, qariId = selectedQari) => {
         setLoadingQuran(true);
         setIsPlayingFullSurah(false);
@@ -406,7 +421,7 @@
         }
       };
 
-      // Infinite Repeat Full Surah Playback
+      // Endless loop Full Surah
       const handlePlayFullSurah = () => {
         if (!surahDetails || surahDetails.verses.length === 0) return;
         if (isPlayingFullSurah) {
@@ -423,7 +438,7 @@
       const playSurahVerse = (index) => {
         if (!isPlayingFullSurah) return;
         if (index >= surahDetails.verses.length) {
-          // Loop back to first verse (index 0) endlessly for Murajaah
+          // Loop back to first verse endlessly
           playSurahVerse(0);
           return;
         }
@@ -443,14 +458,14 @@
         };
       };
 
-      // Infinite Repeat Range Playback
+      // Endless loop range of verses
       const playSurahVerseRange = (currIndex, endIndex) => {
         if (!isPlayingRange) return;
         const startVal = parseInt(startAyah, 10) || 1;
         const endVal = parseInt(endAyah, 10) || surahDetails.info.numberOfAyahs;
 
         if (currIndex > endIndex || currIndex >= surahDetails.verses.length) {
-          // Loop back to the start of range endlessly
+          // Loop back to start of the range endlessly
           playSurahVerseRange(startVal - 1, endVal - 1);
           return;
         }
@@ -729,7 +744,7 @@
         const now = new Date();
         const dateStr = formatDateStr(now.toISOString().split('T')[0]);
         const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-        const timestamp = `${dateStr} ${timeStr}`;
+        const timestamp = `${now.toISOString()}`; // store ISO globally, parser formats local
 
         const payload = {
           action: 'saveInfo',
@@ -1021,40 +1036,41 @@
       const totalPages = Math.ceil(sortedTodos.length / rowsPerPage);
 
       return (
-        <div class="flex-grow flex flex-col min-h-screen relative">
+        <div className="flex-grow flex flex-col min-h-screen relative">
           
-          {}
+          {/* Custom Notification Toast */}
           {toast.show && (
-            <div class="fixed top-20 right-4 z-50 animate-bounce">
-              <div class={`px-4 py-3 rounded-2xl shadow-2xl flex items-center space-x-3 text-white border ${
+            <div className="fixed top-20 right-4 z-50 animate-bounce">
+              <div className={`px-4 py-3 rounded-2xl shadow-2xl flex items-center space-x-3 text-white border ${
                 toast.type === 'success' ? 'bg-emerald-600 border-emerald-500' :
                 toast.type === 'error' ? 'bg-rose-600 border-rose-500' : 'bg-amber-500 border-amber-400'
               }`}>
-                {toast.type === 'success' ? <i class="fa-solid fa-circle-check"></i> :
-                 toast.type === 'error' ? <i class="fa-solid fa-triangle-exclamation"></i> : <i class="fa-solid fa-circle-exclamation"></i>}
-                <span class="text-xs font-bold">{toast.message}</span>
+                {toast.type === 'success' ? <i className="fa-solid fa-circle-check"></i> :
+                 toast.type === 'error' ? <i className="fa-solid fa-triangle-exclamation"></i> : <i className="fa-solid fa-circle-exclamation"></i>}
+                <span className="text-xs font-bold">{toast.message}</span>
               </div>
             </div>
           )}
 
+          {/* Custom Confirmation Modal */}
           {confirmModal.isOpen && (
-            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-              <div class="w-full max-w-sm bg-white dark:bg-stone-900 rounded-3xl p-6 border border-stone-100 dark:border-stone-800 shadow-2xl text-center">
-                <div class="w-12 h-12 rounded-full bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto mb-3">
-                  <i class="fa-solid fa-circle-question text-xl"></i>
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <div className="w-full max-w-sm bg-white dark:bg-stone-900 rounded-3xl p-6 border border-stone-100 dark:border-stone-800 shadow-2xl text-center">
+                <div className="w-12 h-12 rounded-full bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto mb-3">
+                  <i className="fa-solid fa-circle-question text-xl"></i>
                 </div>
-                <h3 class="text-sm font-bold text-slate-800 dark:text-stone-100 mb-2">Konfirmasi Tindakan</h3>
-                <p class="text-xs text-stone-500 dark:text-stone-400 mb-6">{confirmModal.message}</p>
-                <div class="flex space-x-2">
+                <h3 className="text-sm font-bold text-slate-800 dark:text-stone-100 mb-2">Konfirmasi Tindakan</h3>
+                <p className="text-xs text-stone-500 dark:text-stone-400 mb-6">{confirmModal.message}</p>
+                <div className="flex space-x-2">
                   <button 
                     onClick={() => setConfirmModal({ isOpen: false, message: '', action: null })}
-                    class="flex-1 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 text-xs font-bold text-stone-500 dark:text-stone-400 hover:bg-stone-50"
+                    className="flex-1 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 text-xs font-bold text-stone-500 dark:text-stone-400 hover:bg-stone-50"
                   >
                     Batal
                   </button>
                   <button 
                     onClick={confirmModal.action}
-                    class="flex-1 py-2.5 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 shadow-md"
+                    className="flex-1 py-2.5 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 shadow-md"
                   >
                     Ya, Jalankan
                   </button>
@@ -1063,22 +1079,23 @@
             </div>
           )}
 
+          {/* Custom Database URL Setting Modal */}
           {isUrlModalOpen && (
-            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-              <div class="w-full max-w-md bg-white dark:bg-stone-900 rounded-3xl p-6 border border-stone-100 dark:border-stone-800 shadow-2xl">
-                <h3 class="text-sm font-bold text-slate-800 dark:text-stone-100 mb-2 flex items-center">
-                  <i class="fa-solid fa-database text-emerald-600 mr-2"></i> Pengaturan URL Database
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <div className="w-full max-w-md bg-white dark:bg-stone-900 rounded-3xl p-6 border border-stone-100 dark:border-stone-800 shadow-2xl">
+                <h3 className="text-sm font-bold text-slate-800 dark:text-stone-100 mb-2 flex items-center">
+                  <i className="fa-solid fa-database text-emerald-600 mr-2"></i> Pengaturan URL Database
                 </h3>
-                <p class="text-xs text-stone-500 dark:text-stone-400 mb-4">Masukkan tautan Web API Google Apps Script Anda untuk mengaktifkan sinkronisasi Cloud.</p>
+                <p className="text-xs text-stone-500 dark:text-stone-400 mb-4">Masukkan tautan Web API Google Apps Script Anda untuk mengaktifkan sinkronisasi Cloud.</p>
                 <input 
                   type="url"
-                  class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950 text-xs focus:outline-none mb-4"
+                  className="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950 text-xs focus:outline-none mb-4"
                   placeholder="https://script.google.com/macros/s/.../exec"
                   value={customUrlInput}
                   onChange={(e) => setCustomUrlInput(e.target.value)}
                 />
-                <div class="flex space-x-2">
-                  <button onClick={() => setIsUrlModalOpen(false)} class="flex-1 py-2.5 rounded-xl border border-stone-200 text-xs font-bold text-stone-500">Tutup</button>
+                <div className="flex space-x-2">
+                  <button onClick={() => setIsUrlModalOpen(false)} className="flex-1 py-2.5 rounded-xl border border-stone-200 text-xs font-bold text-stone-500">Tutup</button>
                   <button 
                     onClick={() => {
                       setApiUrl(customUrlInput);
@@ -1087,7 +1104,7 @@
                       showToast('Database URL berhasil disimpan!', 'success');
                       window.location.reload();
                     }}
-                    class="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700"
+                    className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700"
                   >
                     Simpan & Terapkan
                   </button>
@@ -1096,106 +1113,103 @@
             </div>
           )}
 
-          {}
-          <header class="bg-islamic-dark text-white px-4 py-3 sticky top-0 z-30 shadow-md flex items-center justify-between">
-            <div class="flex items-center space-x-2.5">
-              <div class="bg-white p-1 rounded-xl flex items-center justify-center shadow-sm w-10 h-10 overflow-hidden">
+          {/* Premium Header Layout */}
+          <header className="bg-islamic-dark text-white px-4 py-3 sticky top-0 z-30 shadow-md flex items-center justify-between">
+            <div className="flex items-center space-x-2.5">
+              <div className="bg-white p-1 rounded-xl flex items-center justify-center shadow-sm w-10 h-10 overflow-hidden">
                 <img 
-                  src="image_41b695.png" 
+                  src="https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/Logo_Kementerian_Agama_Republik_Indonesia.png/120px-Logo_Kementerian_Agama_Republik_Indonesia.png" 
                   alt="Madrasah Logo" 
-                  class="h-8 w-8 object-contain"
-                  onError={(e) => {
-                    e.target.src = "https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/Logo_Kementerian_Agama_Republik_Indonesia.png/120px-Logo_Kementerian_Agama_Republik_Indonesia.png";
-                  }}
+                  className="h-8 w-8 object-contain"
                 />
               </div>
               <div>
-                <h1 class="text-lg font-bold tracking-tight">mani<span class="text-islamic-gold">calendar</span></h1>
-                <p class="text-[10px] text-stone-300 font-semibold tracking-wider">Madrasah Activity Planner</p>
+                <h1 className="text-lg font-bold tracking-tight">mani<span className="text-islamic-gold">calendar</span></h1>
+                <p className="text-[10px] text-stone-300 font-semibold tracking-wider">Madrasah Activity Planner</p>
               </div>
             </div>
 
-            <div class="flex items-center space-x-3">
+            <div className="flex items-center space-x-3">
               <button 
                 onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-                class="p-2 rounded-lg hover:bg-stone-800 transition-colors"
+                className="p-2 rounded-lg hover:bg-stone-800 transition-colors"
                 title="Ganti Tema"
               >
-                {theme === 'light' ? <i class="fa-solid fa-moon"></i> : <i class="fa-solid fa-sun"></i>}
+                {theme === 'light' ? <i className="fa-solid fa-moon"></i> : <i className="fa-solid fa-sun"></i>}
               </button>
 
-              <span class={`text-[10px] px-2 py-1 rounded-full font-bold uppercase ${apiConnected ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'}`}>
-                {apiConnected ? <i class="fa-solid fa-cloud-sun mr-1"></i> : <i class="fa-solid fa-wifi mr-1"></i>}
+              <span className={`text-[10px] px-2 py-1 rounded-full font-bold uppercase ${apiConnected ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'}`}>
+                {apiConnected ? <i className="fa-solid fa-cloud-sun mr-1"></i> : <i className="fa-solid fa-wifi mr-1"></i>}
                 {apiConnected ? 'Cloud Terkoneksi' : 'Mode Lokal'}
               </span>
 
               {currentUser && (
                 <button 
                   onClick={handleLogout}
-                  class="bg-rose-600/35 hover:bg-rose-600 border border-rose-500/40 text-rose-200 text-xs px-3 py-1.5 rounded-xl font-medium transition-all"
+                  className="bg-rose-600/35 hover:bg-rose-600 border border-rose-500/40 text-rose-200 text-xs px-3 py-1.5 rounded-xl font-medium transition-all"
                 >
-                  <i class="fa-solid fa-right-from-bracket mr-1"></i>Keluar
+                  <i className="fa-solid fa-right-from-bracket mr-1"></i>Keluar
                 </button>
               )}
             </div>
           </header>
 
-          {}
+          {/* Authentication Overlay if user is not logged in */}
           {!currentUser ? (
-            <main class="flex-grow flex items-center justify-center p-4">
-              <div class="w-full max-w-md glass-card rounded-3xl shadow-2xl overflow-hidden p-6 border transition-all relative">
-                <div class="text-center mb-6">
-                  <div class="inline-block bg-islamic-mint text-islamic-gold p-4 rounded-3xl mb-3 shadow-inner">
-                    <i class="fa-solid fa-calendar-check text-3xl"></i>
+            <main className="flex-grow flex items-center justify-center p-4">
+              <div className="w-full max-w-md glass-card rounded-3xl shadow-2xl overflow-hidden p-6 border transition-all relative">
+                <div className="text-center mb-6">
+                  <div className="inline-block bg-islamic-mint text-islamic-gold p-4 rounded-3xl mb-3 shadow-inner">
+                    <i className="fa-solid fa-calendar-check text-3xl"></i>
                   </div>
-                  <h2 class="text-2xl font-extrabold text-islamic-dark dark:text-stone-100">Selamat Datang di manICalendar</h2>
-                  <p class="text-xs text-stone-500 dark:text-stone-400 mt-1">Platform Manajemen Aktivitas & Agenda Madrasah</p>
+                  <h2 className="text-2xl font-extrabold text-islamic-dark dark:text-stone-100">Selamat Datang di manICalendar</h2>
+                  <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">Manajemen Aktivitas & Agenda Harian Madrasah</p>
                 </div>
 
                 {authError && (
-                  <div class="bg-red-500/10 border border-red-500/30 text-red-500 text-xs p-3 rounded-xl mb-4 text-center">
-                    <i class="fa-solid fa-triangle-exclamation mr-1"></i> {authError}
+                  <div className="bg-red-500/10 border border-red-500/30 text-red-500 text-xs p-3 rounded-xl mb-4 text-center">
+                    <i className="fa-solid fa-triangle-exclamation mr-1"></i> {authError}
                   </div>
                 )}
                 
                 {authSuccess && (
-                  <div class="bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 text-xs p-3 rounded-xl mb-4 text-center">
-                    <i class="fa-solid fa-circle-check mr-1"></i> {authSuccess}
+                  <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 text-xs p-3 rounded-xl mb-4 text-center">
+                    <i className="fa-solid fa-circle-check mr-1"></i> {authSuccess}
                   </div>
                 )}
 
                 {isRegisterMode ? (
-                  <form onSubmit={handleRegister} class="space-y-4">
+                  <form onSubmit={handleRegister} className="space-y-4">
                     <div>
-                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Username / Nama Lengkap</label>
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Username / Nama Lengkap</label>
                       <input 
                         type="text" 
                         required
-                        class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs"
+                        className="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-slate-800 dark:text-stone-100"
                         placeholder="Contoh: Rafliano"
                         value={regForm.username}
                         onChange={(e) => setRegForm({ ...regForm, username: e.target.value })}
                       />
                     </div>
                     <div>
-                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Alamat Email</label>
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Alamat Email</label>
                       <input 
                         type="email" 
                         required
-                        class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs"
+                        className="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-slate-800 dark:text-stone-100"
                         placeholder="Contoh: rafli@school.id"
                         value={regForm.email}
                         onChange={(e) => setRegForm({ ...regForm, email: e.target.value })}
                       />
                     </div>
                     <div>
-                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Password (Min 3 Karakter)</label>
-                      <div class="relative">
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Password (Min 3 Karakter)</label>
+                      <div className="relative">
                         <input 
                           type={showRegPassword ? "text" : "password"} 
                           required
-                          minLength="3"
-                          class="w-full px-4 py-3 pr-10 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs"
+                          minLength={3}
+                          className="w-full px-4 py-3 pr-10 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-slate-800 dark:text-stone-100"
                           placeholder="••••••••"
                           value={regForm.password}
                           onChange={(e) => setRegForm({ ...regForm, password: e.target.value })}
@@ -1203,9 +1217,9 @@
                         <button 
                           type="button" 
                           onClick={() => setShowRegPassword(!showRegPassword)}
-                          class="absolute right-3 top-3 text-stone-400 hover:text-stone-600 dark:hover:text-white"
+                          className="absolute right-3 top-3.5 text-stone-450 hover:text-stone-600 dark:hover:text-white"
                         >
-                          <i class={`fa-solid ${showRegPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                          <i className={`fa-solid ${showRegPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
                         </button>
                       </div>
                     </div>
@@ -1213,37 +1227,37 @@
                     <button 
                       type="submit" 
                       disabled={syncing}
-                      class="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-islamic-mint text-white font-bold transition-all transform active:scale-95 disabled:opacity-50"
+                      className="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-islamic-mint text-white font-bold transition-all transform active:scale-95 disabled:opacity-50"
                     >
-                      {syncing ? <i class="fa-solid fa-spinner animate-spin"></i> : 'Daftar Akun Baru'}
+                      {syncing ? <i className="fa-solid fa-spinner animate-spin"></i> : 'Daftar Akun Baru'}
                     </button>
 
-                    <div class="text-center text-xs text-stone-500 mt-4">
+                    <div className="text-center text-xs text-stone-500 mt-4">
                       Sudah punya akun?{' '}
-                      <button type="button" onClick={() => { setIsRegisterMode(false); setAuthError(''); }} class="text-emerald-600 font-bold hover:underline">Masuk disini</button>
+                      <button type="button" onClick={() => { setIsRegisterMode(false); setAuthError(''); }} className="text-emerald-600 font-bold hover:underline">Masuk disini</button>
                     </div>
                   </form>
                 ) : (
-                  <form onSubmit={handleLogin} class="space-y-4">
+                  <form onSubmit={handleLogin} className="space-y-4">
                     <div>
-                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Username atau Email</label>
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Username atau Email</label>
                       <input 
                         type="text" 
                         required
-                        class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs"
+                        className="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-slate-800 dark:text-stone-100"
                         placeholder="Masukkan Username atau Email"
                         value={loginForm.username}
                         onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
                       />
                     </div>
                     <div>
-                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Password (Min 3 Karakter)</label>
-                      <div class="relative">
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Password (Min 3 Karakter)</label>
+                      <div className="relative">
                         <input 
                           type={showPassword ? "text" : "password"} 
                           required
-                          minLength="3"
-                          class="w-full px-4 py-3 pr-10 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs"
+                          minLength={3}
+                          className="w-full px-4 py-3 pr-10 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-slate-800 dark:text-stone-100"
                           placeholder="••••••••"
                           value={loginForm.password}
                           onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
@@ -1251,9 +1265,9 @@
                         <button 
                           type="button" 
                           onClick={() => setShowPassword(!showPassword)}
-                          class="absolute right-3 top-3 text-stone-400 hover:text-stone-600 dark:hover:text-white"
+                          className="absolute right-3 top-3.5 text-stone-450 hover:text-stone-600 dark:hover:text-white"
                         >
-                          <i class={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                          <i className={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
                         </button>
                       </div>
                     </div>
@@ -1261,117 +1275,118 @@
                     <button 
                       type="submit" 
                       disabled={syncing}
-                      class="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-islamic-mint text-white font-bold transition-all transform active:scale-95 disabled:opacity-50"
+                      className="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-islamic-mint text-white font-bold transition-all transform active:scale-95 disabled:opacity-50"
                     >
-                      {syncing ? <i class="fa-solid fa-spinner animate-spin"></i> : 'Masuk Aplikasi'}
+                      {syncing ? <i className="fa-solid fa-spinner animate-spin"></i> : 'Masuk Aplikasi'}
                     </button>
 
-                    <div class="text-center text-xs text-stone-500 mt-4">
+                    <div className="text-center text-xs text-stone-500 mt-4">
                       Belum memiliki akun?{' '}
-                      <button type="button" onClick={() => { setIsRegisterMode(true); setAuthError(''); }} class="text-emerald-600 font-bold hover:underline">Registrasi disini</button>
+                      <button type="button" onClick={() => { setIsRegisterMode(true); setAuthError(''); }} className="text-emerald-600 font-bold hover:underline">Registrasi disini</button>
                     </div>
                   </form>
                 )}
 
-                <div class="mt-6 pt-4 border-t border-stone-100 dark:border-stone-800 text-center">
+                <div className="mt-6 pt-4 border-t border-stone-100 dark:border-stone-800 text-center">
                   <button 
                     onClick={() => {
                       setCustomUrlInput(apiUrl);
                       setIsUrlModalOpen(true);
                     }}
-                    class="text-xs font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl"
+                    className="text-xs font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl"
                   >
-                    <i class="fa-solid fa-database mr-1"></i> Set URL Database
+                    <i className="fa-solid fa-database mr-1"></i> Set URL Database
                   </button>
                 </div>
               </div>
             </main>
           ) : (
-            <main class="flex-grow max-w-4xl w-full mx-auto p-4 flex flex-col space-y-4 pb-24">
-              <div class="flex overflow-x-auto no-scrollbar bg-white dark:bg-stone-900 p-1.5 rounded-2xl shadow-sm border border-stone-100 dark:border-stone-800 space-x-1">
+            <main className="flex-grow max-w-4xl w-full mx-auto p-4 flex flex-col space-y-4 pb-24">
+              <div className="flex overflow-x-auto no-scrollbar bg-white dark:bg-stone-900 p-1.5 rounded-2xl shadow-sm border border-stone-100 dark:border-stone-800 space-x-1">
                 <button 
                   onClick={() => { setCurrentTab('home'); setCurrentPage(1); }}
-                  class={`flex-1 min-w-[90px] flex-shrink-0 py-3 px-2 text-xs font-bold rounded-xl transition-all ${currentTab === 'home' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
+                  className={`flex-1 min-w-[90px] flex-shrink-0 py-3 px-2 text-xs font-bold rounded-xl transition-all ${currentTab === 'home' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
                 >
-                  <i class="fa-solid fa-home text-base block mb-1 text-center"></i> Beranda
+                  <i className="fa-solid fa-home text-base block mb-1 text-center"></i> Beranda
                 </button>
                 <button 
                   onClick={() => setCurrentTab('calendar')}
-                  class={`flex-1 min-w-[90px] flex-shrink-0 py-3 px-2 text-xs font-bold rounded-xl transition-all ${currentTab === 'calendar' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
+                  className={`flex-1 min-w-[90px] flex-shrink-0 py-3 px-2 text-xs font-bold rounded-xl transition-all ${currentTab === 'calendar' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
                 >
-                  <i class="fa-solid fa-calendar-alt text-base block mb-1 text-center"></i> Kalender
+                  <i className="fa-solid fa-calendar-alt text-base block mb-1 text-center"></i> Kalender
                 </button>
                 <button 
                   onClick={() => setCurrentTab('quran')}
-                  class={`flex-1 min-w-[90px] flex-shrink-0 py-3 px-2 text-xs font-bold rounded-xl transition-all ${currentTab === 'quran' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
+                  className={`flex-1 min-w-[90px] flex-shrink-0 py-3 px-2 text-xs font-bold rounded-xl transition-all ${currentTab === 'quran' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
                 >
-                  <i class="fa-solid fa-book-quran text-base block mb-1 text-center"></i> Quran
+                  <i className="fa-solid fa-book-quran text-base block mb-1 text-center"></i> Quran
                 </button>
                 <button 
                   onClick={() => setCurrentTab('radio')}
-                  class={`flex-1 min-w-[90px] flex-shrink-0 py-3 px-2 text-xs font-bold rounded-xl transition-all ${currentTab === 'radio' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
+                  className={`flex-1 min-w-[90px] flex-shrink-0 py-3 px-2 text-xs font-bold rounded-xl transition-all ${currentTab === 'radio' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
                 >
-                  <i class="fa-solid fa-radio text-base block mb-1 text-center"></i> Radio Rodja
+                  <i className="fa-solid fa-radio text-base block mb-1 text-center"></i> Radio Rodja
                 </button>
                 <button 
                   onClick={() => setCurrentTab('makkah')}
-                  class={`flex-1 min-w-[90px] flex-shrink-0 py-3 px-2 text-xs font-bold rounded-xl transition-all ${currentTab === 'makkah' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
+                  className={`flex-1 min-w-[90px] flex-shrink-0 py-3 px-2 text-xs font-bold rounded-xl transition-all ${currentTab === 'makkah' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
                 >
-                  <i class="fa-brands fa-youtube text-base block mb-1 text-center"></i> Live Makkah
+                  <i className="fa-brands fa-youtube text-base block mb-1 text-center"></i> Live Makkah
                 </button>
                 <button 
                   onClick={() => setCurrentTab('madinah')}
-                  class={`flex-1 min-w-[90px] flex-shrink-0 py-3 px-2 text-xs font-bold rounded-xl transition-all ${currentTab === 'madinah' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
+                  className={`flex-1 min-w-[90px] flex-shrink-0 py-3 px-2 text-xs font-bold rounded-xl transition-all ${currentTab === 'madinah' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
                 >
-                  <i class="fa-brands fa-youtube text-base block mb-1 text-center"></i> Live Madinah
+                  <i className="fa-brands fa-youtube text-base block mb-1 text-center"></i> Live Madinah
                 </button>
                 <button 
                   onClick={() => setCurrentTab('info')}
-                  class={`flex-1 min-w-[90px] flex-shrink-0 py-3 px-2 text-xs font-bold rounded-xl transition-all ${currentTab === 'info' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
+                  className={`flex-1 min-w-[90px] flex-shrink-0 py-3 px-2 text-xs font-bold rounded-xl transition-all ${currentTab === 'info' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
                 >
-                  <i class="fa-solid fa-circle-info text-base block mb-1 text-center"></i> Informasi
+                  <i className="fa-solid fa-circle-info text-base block mb-1 text-center"></i> Informasi
                 </button>
                 <button 
                   onClick={() => setCurrentTab('settings')}
-                  class={`flex-1 min-w-[90px] flex-shrink-0 py-3 px-2 text-xs font-bold rounded-xl transition-all ${currentTab === 'settings' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
+                  className={`flex-1 min-w-[90px] flex-shrink-0 py-3 px-2 text-xs font-bold rounded-xl transition-all ${currentTab === 'settings' ? 'bg-gradient-to-r from-emerald-600/10 to-islamic-mint/10 text-emerald-600 dark:text-emerald-400' : 'text-stone-400 hover:text-stone-600'}`}
                 >
-                  <i class="fa-solid fa-cog text-base block mb-1 text-center"></i> Sistem
+                  <i className="fa-solid fa-cog text-base block mb-1 text-center"></i> Sistem
                 </button>
               </div>
 
-              {}
+              {/* HOME TAB CONTENT */}
               {currentTab === 'home' && (
-                <div class="space-y-4">
-                  <div class="sholat-card text-white p-6 rounded-3xl relative overflow-hidden shadow-xl">
-                    <div class="absolute right-[-20px] top-[-20px] opacity-10">
-                      <i class="fa-solid fa-mosque text-9xl"></i>
+                <div className="space-y-4">
+                  <div className="sholat-card text-white p-6 rounded-3xl relative overflow-hidden shadow-xl">
+                    <div className="absolute right-[-20px] top-[-20px] opacity-10">
+                      <i className="fa-solid fa-mosque text-9xl"></i>
                     </div>
-                    <div class="relative z-10">
-                      <span class="text-[10px] uppercase font-bold tracking-widest text-emerald-300">Ahlan Wa Sahlan Bp/Ibu</span>
-                      <h3 class="text-2xl font-bold tracking-tight mt-1">Assalamualaikum, {currentUser.username}!</h3>
-                      <p class="text-sm text-stone-200 mt-1 font-medium">Manajemen Aktifitas Madrasah</p>
+                    <div className="relative z-10">
+                      <span className="text-[10px] uppercase font-bold tracking-widest text-emerald-300">Ahlan Wa Sahlan Bp/Ibu</span>
+                      <h3 className="text-2xl font-bold tracking-tight mt-1">Assalamualaikum, {currentUser.username}!</h3>
+                      <p className="text-sm text-stone-200 mt-1 font-medium">Manajemen Aktifitas Madrasah</p>
                       
-                      <div class="flex items-center space-x-2 mt-4 pt-4 border-t border-emerald-800/60">
-                        <i class="fa-regular fa-calendar-check text-islamic-gold"></i>
-                        <span class="text-xs font-medium text-stone-200">{getHijriDate()}</span>
-                        <span class="text-xs text-emerald-300">|</span>
-                        <span class="text-xs font-semibold text-stone-200">{formatDateStr(new Date().toISOString().split('T')[0])}</span>
+                      <div className="flex items-center space-x-2 mt-4 pt-4 border-t border-emerald-800/60">
+                        <i className="fa-regular fa-calendar-check text-islamic-gold"></i>
+                        <span className="text-xs font-medium text-stone-200">{getHijriDate()}</span>
+                        <span className="text-xs text-emerald-300">|</span>
+                        <span className="text-xs font-semibold text-stone-200">{formatDateStr(new Date().toISOString().split('T')[0])}</span>
                       </div>
                     </div>
                   </div>
 
-                  <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
-                    <div class="flex items-center justify-between mb-4">
-                      <div class="flex items-center space-x-2">
-                        <i class="fa-solid fa-clock text-emerald-600"></i>
-                        <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100">Jadwal Sholat Hari Ini</h4>
+                  {/* Prayer Schedule Cards */}
+                  <div className="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center space-x-2">
+                        <i className="fa-solid fa-clock text-emerald-600"></i>
+                        <h4 className="font-bold text-sm text-islamic-dark dark:text-stone-100">Jadwal Sholat Hari Ini</h4>
                       </div>
-                      <a href="https://www.jadwalsholat.org" target="_blank" rel="noreferrer" class="inline-block p-1 bg-stone-50 dark:bg-stone-800 rounded-lg hover:scale-105 transition-transform">
-                        <img class="aligncenter" style={{ textAlign: 'center' }} alt="jadwal-sholat" src="https://www.jadwalsholat.org/wp-content/uploads/2013/09/jadwal-sholat.png" width="81" height="18" />
+                      <a href="https://www.jadwalsholat.org" target="_blank" rel="noreferrer" className="inline-block p-1 bg-stone-50 dark:bg-stone-800 rounded-lg hover:scale-105 transition-transform">
+                        <img className="aligncenter" style={{ textAlign: 'center' }} alt="jadwal-sholat" src="https://www.jadwalsholat.org/wp-content/uploads/2013/09/jadwal-sholat.png" width="81" height="18" />
                       </a>
                     </div>
 
-                    <div class="grid grid-cols-5 gap-2 text-center">
+                    <div className="grid grid-cols-5 gap-2 text-center">
                       {[
                         { name: 'Subuh', time: '04:36', icon: 'fa-cloud-sun' },
                         { name: 'Dzuhur', time: '11:53', icon: 'fa-sun' },
@@ -1379,103 +1394,103 @@
                         { name: 'Maghrib', time: '17:48', icon: 'fa-moon' },
                         { name: 'Isya', time: '19:01', icon: 'fa-star-and-crescent' }
                       ].map((sholat) => (
-                        <div key={sholat.name} class="bg-slate-50 dark:bg-stone-800/50 p-2.5 rounded-2xl flex flex-col items-center justify-center border border-stone-100/50 dark:border-stone-800/60">
-                          <i class={`fa-solid ${sholat.icon} text-emerald-600 mb-1 text-sm`}></i>
-                          <span class="text-[10px] font-bold text-stone-500 dark:text-stone-400 block">{sholat.name}</span>
-                          <span class="text-xs font-extrabold text-islamic-dark dark:text-stone-200 mt-1">{sholat.time}</span>
+                        <div key={sholat.name} className="bg-slate-50 dark:bg-stone-800/50 p-2.5 rounded-2xl flex flex-col items-center justify-center border border-stone-100/50 dark:border-stone-800/60">
+                          <i className={`fa-solid ${sholat.icon} text-emerald-600 mb-1 text-sm`}></i>
+                          <span className="text-[10px] font-bold text-stone-500 dark:text-stone-400 block">{sholat.name}</span>
+                          <span className="text-xs font-extrabold text-islamic-dark dark:text-stone-200 mt-1">{sholat.time}</span>
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  {}
-                  <div class="bg-white dark:bg-stone-900 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 overflow-hidden">
-                    <div class="p-5 border-b border-stone-100 dark:border-stone-800 flex items-center justify-between">
-                      <div class="flex items-center space-x-2">
-                        <i class="fa-solid fa-list-check text-emerald-600"></i>
-                        <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100">Rencana Kerja Madrasah</h4>
+                  {/* Agenda Rencana Kerja Table */}
+                  <div className="bg-white dark:bg-stone-900 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 overflow-hidden">
+                    <div className="p-5 border-b border-stone-100 dark:border-stone-800 flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <i className="fa-solid fa-list-check text-emerald-600"></i>
+                        <h4 className="font-bold text-sm text-islamic-dark dark:text-stone-100">Rencana Kerja Madrasah</h4>
                       </div>
                       {currentUser.role === 'admin' && (
                         <button 
                           onClick={() => handleDateClick(new Date().toISOString().split('T')[0])}
-                          class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-xl font-bold transition-all shadow-sm flex items-center"
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-xl font-bold transition-all shadow-sm flex items-center"
                         >
-                          <i class="fa-solid fa-plus mr-1"></i> Tambah Aktifitas
+                          <i className="fa-solid fa-plus mr-1"></i> Tambah Aktifitas
                         </button>
                       )}
                     </div>
 
-                    <div class="overflow-x-auto no-scrollbar">
-                      <table class="w-full text-left border-collapse">
+                    <div className="overflow-x-auto no-scrollbar">
+                      <table className="w-full text-left border-collapse">
                         <thead>
-                          <tr class="bg-stone-50 dark:bg-stone-800/40 text-[10px] font-extrabold tracking-wider uppercase text-stone-400">
-                            <th class="px-4 py-3">No</th>
-                            <th class="px-4 py-3">Aktifitas & Sub</th>
-                            <th class="px-4 py-3">Tgl Mulai</th>
-                            <th class="px-4 py-3">Tgl Selesai</th>
-                            <th class="px-4 py-3">Progress</th>
-                            <th class="px-4 py-3">PIC</th>
-                            <th class="px-4 py-3 text-center">Aksi</th>
+                          <tr className="bg-stone-50 dark:bg-stone-800/40 text-[10px] font-extrabold tracking-wider uppercase text-stone-400">
+                            <th className="px-4 py-3">No</th>
+                            <th className="px-4 py-3">Aktifitas & Sub</th>
+                            <th className="px-4 py-3">Tgl Mulai</th>
+                            <th className="px-4 py-3">Tgl Selesai</th>
+                            <th className="px-4 py-3">Progress</th>
+                            <th className="px-4 py-3">PIC</th>
+                            <th className="px-4 py-3 text-center">Aksi</th>
                           </tr>
                         </thead>
-                        <tbody class="divide-y divide-stone-100 dark:divide-stone-800 text-xs">
+                        <tbody className="divide-y divide-stone-100 dark:divide-stone-800 text-xs">
                           {currentTodos.length === 0 ? (
                             <tr>
-                              <td colSpan="7" class="text-center py-8 text-stone-400">Belum ada agenda rencana kerja terdaftar.</td>
+                              <td colSpan="7" className="text-center py-8 text-stone-400">Belum ada agenda rencana kerja terdaftar.</td>
                             </tr>
                           ) : (
                             currentTodos.map((todo, idx) => (
-                              <tr key={todo.id} class="hover:bg-stone-50/50 dark:hover:bg-stone-800/20">
-                                <td class="px-4 py-4 font-bold text-stone-400">{idxOfFirstRow + idx + 1}</td>
-                                <td class="px-4 py-4">
-                                  <button onClick={() => setKeteranganModal({ isOpen: true, todo: todo, text: todo.keterangan || '' })} class="text-left group w-full outline-none focus:outline-none">
-                                    <div class="font-bold text-emerald-700 dark:text-emerald-500 text-sm group-hover:underline cursor-pointer flex items-center">
+                              <tr key={todo.id} className="hover:bg-stone-50/50 dark:hover:bg-stone-800/20">
+                                <td className="px-4 py-4 font-bold text-stone-400">{idxOfFirstRow + idx + 1}</td>
+                                <td className="px-4 py-4">
+                                  <button onClick={() => setKeteranganModal({ isOpen: true, todo: todo, text: todo.keterangan || '' })} className="text-left group w-full outline-none focus:outline-none">
+                                    <div className="font-bold text-emerald-700 dark:text-emerald-500 text-sm group-hover:underline cursor-pointer flex items-center">
                                       {todo.task}
-                                      <i class="fa-solid fa-arrow-up-right-from-square text-[10px] ml-2 opacity-50 group-hover:opacity-100 transition-opacity"></i>
+                                      <i className="fa-solid fa-arrow-up-right-from-square text-[10px] ml-2 opacity-50 group-hover:opacity-100 transition-opacity"></i>
                                     </div>
-                                    <div class="text-xs text-stone-500 dark:text-stone-400 mt-0.5">{todo.subActivity}</div>
+                                    <div className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">{todo.subActivity}</div>
                                   </button>
                                 </td>
-                                <td class="px-4 py-4 text-stone-600 dark:text-stone-300 font-medium whitespace-nowrap">{formatDateStr(todo.startDate)}</td>
-                                <td class="px-4 py-4 text-stone-600 dark:text-stone-300 font-medium whitespace-nowrap">{formatDateStr(todo.endDate)}</td>
-                                <td class="px-4 py-4">
-                                  <div class="flex items-center space-x-2">
-                                    <div class="w-16 bg-stone-100 dark:bg-stone-800 rounded-full h-1.5 overflow-hidden">
-                                      <div class="bg-emerald-600 h-full rounded-full" style={{ width: `${todo.progress}%` }}></div>
+                                <td className="px-4 py-4 text-stone-600 dark:text-stone-300 font-medium whitespace-nowrap">{formatDateStr(todo.startDate)}</td>
+                                <td className="px-4 py-4 text-stone-600 dark:text-stone-300 font-medium whitespace-nowrap">{formatDateStr(todo.endDate)}</td>
+                                <td className="px-4 py-4">
+                                  <div className="flex items-center space-x-2">
+                                    <div className="w-16 bg-stone-100 dark:bg-stone-800 rounded-full h-1.5 overflow-hidden">
+                                      <div className="bg-emerald-600 h-full rounded-full" style={{ width: `${todo.progress}%` }}></div>
                                     </div>
-                                    <span class="font-bold text-[11px]">{todo.progress}%</span>
+                                    <span className="font-bold text-[11px]">{todo.progress}%</span>
                                   </div>
                                 </td>
-                                <td class="px-4 py-4 whitespace-nowrap"><span class="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-semibold px-2 py-1 rounded-md text-[10px]">{todo.pic}</span></td>
-                                <td class="px-4 py-4 text-center whitespace-nowrap">
+                                <td className="px-4 py-4 whitespace-nowrap"><span className="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-semibold px-2 py-1 rounded-md text-[10px]">{todo.pic}</span></td>
+                                <td className="px-4 py-4 text-center whitespace-nowrap">
                                   {currentUser.role === 'admin' ? (
-                                    <div class="flex items-center justify-center space-x-1.5">
+                                    <div className="flex items-center justify-center space-x-1.5">
                                       {todo.progress < 100 && (
                                         <button 
                                           onClick={() => handleMarkDone(todo)}
-                                          class="bg-emerald-500 hover:bg-emerald-600 text-white p-1.5 rounded-lg text-xs"
+                                          className="bg-emerald-500 hover:bg-emerald-600 text-white p-1.5 rounded-lg text-xs"
                                           title="Setujui Selesai (100%)"
                                         >
-                                          <i class="fa-solid fa-check"></i>
+                                          <i className="fa-solid fa-check"></i>
                                         </button>
                                       )}
                                       <button 
                                         onClick={() => handleEditClick(todo)}
-                                        class="bg-blue-500 hover:bg-blue-600 text-white p-1.5 rounded-lg text-xs"
+                                        className="bg-blue-500 hover:bg-blue-600 text-white p-1.5 rounded-lg text-xs"
                                         title="Ubah Rencana"
                                       >
-                                        <i class="fa-solid fa-edit"></i>
+                                        <i className="fa-solid fa-edit"></i>
                                       </button>
                                       <button 
                                         onClick={() => handleDeleteActivity(todo.id)}
-                                        class="bg-red-500 hover:bg-red-600 text-white p-1.5 rounded-lg text-xs"
+                                        className="bg-red-500 hover:bg-red-600 text-white p-1.5 rounded-lg text-xs"
                                         title="Hapus Rencana"
                                       >
-                                        <i class="fa-solid fa-trash"></i>
+                                        <i className="fa-solid fa-trash"></i>
                                       </button>
                                     </div>
                                   ) : (
-                                    <span class="text-stone-400 italic">Hanya Lihat</span>
+                                    <span className="text-stone-400 italic">Hanya Lihat</span>
                                   )}
                                 </td>
                               </tr>
@@ -1486,19 +1501,19 @@
                     </div>
 
                     {totalPages > 1 && (
-                      <div class="p-4 bg-slate-50 dark:bg-stone-900 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between">
+                      <div className="p-4 bg-slate-50 dark:bg-stone-900 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between">
                         <button
                           disabled={currentPage === 1}
                           onClick={() => setCurrentPage(currentPage - 1)}
-                          class="px-3 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-stone-800 border dark:border-stone-700 disabled:opacity-50 hover:bg-stone-100"
+                          className="px-3 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-stone-800 border dark:border-stone-700 disabled:opacity-50 hover:bg-stone-100"
                         >
                           Sebelumnya
                         </button>
-                        <span class="text-xs font-semibold text-stone-500">Halaman {currentPage} dari {totalPages}</span>
+                        <span className="text-xs font-semibold text-stone-500">Halaman {currentPage} dari {totalPages}</span>
                         <button
                           disabled={currentPage === totalPages}
                           onClick={() => setCurrentPage(currentPage + 1)}
-                          class="px-3 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-stone-800 border dark:border-stone-700 disabled:opacity-50 hover:bg-stone-100"
+                          className="px-3 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-stone-800 border dark:border-stone-700 disabled:opacity-50 hover:bg-stone-100"
                         >
                           Selanjutnya
                         </button>
@@ -1508,32 +1523,32 @@
                 </div>
               )}
 
-              {}
+              {/* CALENDAR TAB CONTENT */}
               {currentTab === 'calendar' && (
-                <div class="space-y-4">
+                <div className="space-y-4">
                   {currentUser.role === 'admin' ? (
-                    <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
-                      <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 md:col-span-5 flex flex-col items-center">
-                        <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100 mb-3 flex items-center">
-                          <i class="fa-solid fa-moon text-emerald-600 mr-2"></i> Kalender Hijriyah
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                      <div className="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 md:col-span-5 flex flex-col items-center">
+                        <h4 className="font-bold text-sm text-islamic-dark dark:text-stone-100 mb-3 flex items-center">
+                          <i className="fa-solid fa-moon text-emerald-600 mr-2"></i> Kalender Hijriyah
                         </h4>
-                        <div class="w-full flex items-center justify-center rounded-2xl overflow-hidden bg-slate-50 border border-stone-100">
+                        <div className="w-full flex items-center justify-center rounded-2xl overflow-hidden bg-slate-50 border border-stone-100">
                           <iframe id="g2hFrame" title="islamic-calendar" style={{ width: '250px', height: '312px', border: 'none' }} scrolling="no" src="https://www.islamicfinder.org/islamic-calendar/widgetGregorian?type=Gregorian"></iframe>
                         </div>
                       </div>
 
-                      <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 md:col-span-7">
-                        <div class="flex items-center justify-between mb-4">
-                          <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100 flex items-center">
-                            <i class="fa-solid fa-calendar-days text-emerald-600 mr-2"></i> Klik Tanggal untuk Tambah Tugas
+                      <div className="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 md:col-span-7">
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="font-bold text-sm text-islamic-dark dark:text-stone-100 flex items-center">
+                            <i className="fa-solid fa-calendar-days text-emerald-600 mr-2"></i> Klik Tanggal untuk Tambah Tugas
                           </h4>
                         </div>
 
-                        <div class="grid grid-cols-7 gap-1 text-center font-bold text-[11px] mb-2 text-stone-400">
+                        <div className="grid grid-cols-7 gap-1 text-center font-bold text-[11px] mb-2 text-stone-400">
                           <span>Min</span><span>Sen</span><span>Sel</span><span>Rab</span><span>Kam</span><span>Jum</span><span>Sab</span>
                         </div>
                         
-                        <div class="grid grid-cols-7 gap-1">
+                        <div className="grid grid-cols-7 gap-1">
                           {Array.from({ length: 31 }, (_, i) => {
                             const dateNum = i + 1;
                             const dateStr = `2026-06-${dateNum.toString().padStart(2, '0')}`;
@@ -1543,11 +1558,11 @@
                               <button 
                                 key={dateNum}
                                 onClick={() => handleDateClick(dateStr)}
-                                class="aspect-square flex flex-col justify-between items-center p-1 bg-stone-50 hover:bg-emerald-50 dark:bg-stone-800/40 dark:hover:bg-stone-800 rounded-xl relative border border-stone-100 dark:border-stone-800 transition-all hover:scale-[1.05]"
+                                className="aspect-square flex flex-col justify-between items-center p-1 bg-stone-50 hover:bg-emerald-50 dark:bg-stone-800/40 dark:hover:bg-stone-800 rounded-xl relative border border-stone-100 dark:border-stone-800 transition-all hover:scale-[1.05]"
                               >
-                                <span class="text-xs font-bold self-start text-stone-600 dark:text-stone-300">{dateNum}</span>
+                                <span className="text-xs font-bold self-start text-stone-600 dark:text-stone-300">{dateNum}</span>
                                 {dayTasks.length > 0 && (
-                                  <span class="w-2 h-2 rounded-full bg-emerald-500 absolute bottom-1 right-1" title={`${dayTasks.length} Agenda aktif`}></span>
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500 absolute bottom-1 right-1" title={`${dayTasks.length} Agenda aktif`}></span>
                                 )}
                               </button>
                             );
@@ -1556,11 +1571,11 @@
                       </div>
                     </div>
                   ) : (
-                    <div class="bg-white dark:bg-stone-900 p-8 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 flex flex-col items-center justify-center max-w-md mx-auto">
-                      <h4 class="font-bold text-base text-islamic-dark dark:text-stone-100 mb-4 flex items-center">
-                        <i class="fa-solid fa-moon text-emerald-600 mr-2 animate-pulse"></i> Kalender Hijriyah Hari Ini
+                    <div className="bg-white dark:bg-stone-900 p-8 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 flex flex-col items-center justify-center max-w-md mx-auto">
+                      <h4 className="font-bold text-base text-islamic-dark dark:text-stone-100 mb-4 flex items-center">
+                        <i className="fa-solid fa-moon text-emerald-600 mr-2 animate-pulse"></i> Kalender Hijriyah Hari Ini
                       </h4>
-                      <div class="w-full flex items-center justify-center rounded-2xl overflow-hidden bg-slate-50 dark:bg-stone-800 border border-stone-100 dark:border-stone-800 p-4">
+                      <div className="w-full flex items-center justify-center rounded-2xl overflow-hidden bg-slate-50 dark:bg-stone-800 border border-stone-100 dark:border-stone-800 p-4">
                         <iframe id="g2hFrameUser" title="islamic-calendar-user" style={{ width: '250px', height: '312px', border: 'none' }} scrolling="no" src="https://www.islamicfinder.org/islamic-calendar/widgetGregorian?type=Gregorian"></iframe>
                       </div>
                     </div>
@@ -1568,50 +1583,51 @@
                 </div>
               )}
 
+              {/* QURAN TAB CONTENT WITH NEW DROPDOWN MODE AND ADVANCED QARI LIST */}
               {}
               {currentTab === 'quran' && (
-                <div class="space-y-4">
+                <div className="space-y-4">
                   {!selectedSurah ? (
-                    <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
-                      <div class="mb-4">
-                        <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100 flex items-center mb-2">
-                          <i class="fa-solid fa-book-open text-emerald-600 mr-2"></i> Portal Al-Quran & Terjemah
+                    <div className="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
+                      <div className="mb-4">
+                        <h4 className="font-bold text-sm text-islamic-dark dark:text-stone-100 flex items-center mb-2">
+                          <i className="fa-solid fa-book-open text-emerald-600 mr-2"></i> Portal Al-Quran & Terjemah
                         </h4>
-                        <div class="relative">
+                        <div className="relative">
                           <input 
                             type="text" 
-                            class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
                             placeholder="Cari surat (Contoh: Al-Fatihah, Ya-Sin)..."
                             value={quranSearch}
                             onChange={(e) => setQuranSearch(e.target.value)}
                           />
-                          <i class="fa-solid fa-search text-stone-400 absolute left-3.5 top-3.5 text-xs"></i>
+                          <i className="fa-solid fa-search text-stone-400 absolute left-3.5 top-3.5 text-xs"></i>
                         </div>
                       </div>
 
                       {loadingQuran ? (
-                        <div class="text-center py-10">
-                          <i class="fa-solid fa-spinner animate-spin text-emerald-600 text-2xl"></i>
-                          <p class="text-xs text-stone-400 mt-2">Memuat data Al-Quran...</p>
+                        <div className="text-center py-10">
+                          <i className="fa-solid fa-spinner animate-spin text-emerald-600 text-2xl"></i>
+                          <p className="text-xs text-stone-400 mt-2">Memuat data Al-Quran...</p>
                         </div>
                       ) : (
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto no-scrollbar">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto no-scrollbar">
                           {quranSurahs
                             .filter(surah => surah.englishName.toLowerCase().includes(quranSearch.toLowerCase()) || surah.name.includes(quranSearch))
                             .map((surah) => (
                               <button 
                                 key={surah.number}
                                 onClick={() => viewSurahDetails(surah.number, selectedQari)}
-                                class="p-3.5 rounded-2xl bg-stone-50/50 hover:bg-emerald-50/40 border border-stone-100 dark:bg-stone-800/25 dark:border-stone-800/40 text-left transition-all hover:scale-[1.01] flex items-center justify-between"
+                                className="p-3.5 rounded-2xl bg-stone-50/50 hover:bg-emerald-50/40 border border-stone-100 dark:bg-stone-800/25 dark:border-stone-800/40 text-left transition-all hover:scale-[1.01] flex items-center justify-between"
                               >
-                                <div class="flex items-center space-x-3">
-                                  <span class="bg-emerald-600/10 text-emerald-600 font-bold w-7 h-7 flex items-center justify-center rounded-xl text-xs">{surah.number}</span>
+                                <div className="flex items-center space-x-3">
+                                  <span className="bg-emerald-600/10 text-emerald-600 font-bold w-7 h-7 flex items-center justify-center rounded-xl text-xs">{surah.number}</span>
                                   <div>
-                                    <div class="font-bold text-xs">{surah.englishName}</div>
-                                    <div class="text-[10px] text-stone-400 uppercase tracking-widest">{surah.englishNameTranslation} ({surah.numberOfAyahs} Ayat)</div>
+                                    <div className="font-bold text-xs">{surah.englishName}</div>
+                                    <div className="text-[10px] text-stone-400 uppercase tracking-widest">{surah.englishNameTranslation} ({surah.numberOfAyahs} Ayat)</div>
                                   </div>
                                 </div>
-                                <div class="arabic-text text-lg text-emerald-700 font-bold">{surah.name}</div>
+                                <div className="arabic-text text-lg text-emerald-700 font-bold">{surah.name}</div>
                               </button>
                             ))
                           }
@@ -1619,11 +1635,11 @@
                       )}
                     </div>
                   ) : (
-                    <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
+                    <div className="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
                       
                       {/* Control Panel: Back button, Qari Dropdown, Play options */}
-                      <div class="flex flex-col space-y-4 pb-3 border-b border-stone-100 dark:border-stone-800 mb-4">
-                        <div class="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex flex-col space-y-4 pb-3 border-b border-stone-100 dark:border-stone-800 mb-4">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
                           <button 
                             onClick={() => { 
                               setSelectedSurah(null); 
@@ -1634,32 +1650,32 @@
                               setEndAyah(''); 
                               if (audioRef.current) audioRef.current.pause(); 
                             }}
-                            class="text-xs text-emerald-600 font-bold flex items-center hover:underline"
+                            className="text-xs text-emerald-600 font-bold flex items-center hover:underline"
                           >
-                            <i class="fa-solid fa-arrow-left mr-1"></i> Kembali ke Daftar
+                            <i className="fa-solid fa-arrow-left mr-1"></i> Kembali ke Daftar
                           </button>
 
                           {surahDetails && (
-                            <div class="text-right">
-                              <h4 class="font-bold text-xs text-slate-800 dark:text-stone-100">{surahDetails.info.englishName}</h4>
-                              <p class="text-[10px] text-stone-400 font-semibold">{surahDetails.info.numberOfAyahs} Ayat</p>
+                            <div className="text-right">
+                              <h4 className="font-bold text-xs text-slate-800 dark:text-stone-100">{surahDetails.info.englishName}</h4>
+                              <p className="text-[10px] text-stone-400 font-semibold">{surahDetails.info.numberOfAyahs} Ayat</p>
                             </div>
                           )}
                         </div>
 
                         {/* Qari Selection Dropdown & Play Controls */}
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 bg-stone-50 dark:bg-stone-800/40 p-4 rounded-2xl border border-stone-100 dark:border-stone-800">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-stone-50 dark:bg-stone-800/40 p-4 rounded-2xl border border-stone-100 dark:border-stone-800">
                           
                           {/* Qari Picker */}
-                          <div class="flex flex-col">
-                            <label class="text-[9px] font-bold text-stone-400 uppercase tracking-wider mb-1"><i class="fa-solid fa-microphone mr-1 text-emerald-600"></i> Pilihan Qari / Reciter</label>
+                          <div className="flex flex-col">
+                            <label className="text-[9px] font-bold text-stone-400 uppercase tracking-wider mb-1"><i className="fa-solid fa-microphone mr-1 text-emerald-600"></i> Pilihan Qari / Reciter</label>
                             <select 
                               value={selectedQari}
                               onChange={(e) => {
                                 setSelectedQari(e.target.value);
                                 viewSurahDetails(selectedSurah, e.target.value);
                               }}
-                              class="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs rounded-xl px-2.5 py-1.5 font-bold text-slate-800 dark:text-stone-200 focus:outline-none"
+                              className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs rounded-xl px-2.5 py-1.5 font-bold text-slate-800 dark:text-stone-200 focus:outline-none"
                             >
                               {qariList.map(q => (
                                 <option key={q.id} value={q.id}>{q.name}</option>
@@ -1668,9 +1684,9 @@
                           </div>
 
                           {/* Play Mode & Play Action */}
-                          <div class="flex flex-col space-y-1.5">
-                            <label class="text-[9px] font-bold text-stone-400 uppercase tracking-wider"><i class="fa-solid fa-play-circle mr-1 text-emerald-600"></i> Mode Pemutaran</label>
-                            <div class="flex items-center space-x-2">
+                          <div className="flex flex-col space-y-1.5">
+                            <label className="text-[9px] font-bold text-stone-400 uppercase tracking-wider"><i className="fa-solid fa-play-circle mr-1 text-emerald-600"></i> Mode Pemutaran</label>
+                            <div className="flex items-center space-x-2">
                               <select 
                                 value={quranPlayMode}
                                 onChange={(e) => {
@@ -1682,14 +1698,14 @@
                                   setIsPlayingRange(false);
                                   setPlayingAudio(null);
                                 }}
-                                class="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs rounded-xl px-2 py-1.5 font-bold text-slate-800 dark:text-stone-200 focus:outline-none flex-1"
+                                className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs rounded-xl px-2 py-1.5 font-bold text-slate-800 dark:text-stone-200 focus:outline-none flex-1"
                               >
                                 <option value="full">Putar Full Surat (Repeat)</option>
                                 <option value="range">Putar Ayat Tertentu (Repeat)</option>
                               </select>
 
                               {quranPlayMode === 'range' && (
-                                <div class="flex items-center space-x-1">
+                                <div className="flex items-center space-x-1">
                                   <input 
                                     type="number"
                                     min="1"
@@ -1697,9 +1713,9 @@
                                     value={startAyah}
                                     onChange={(e) => setStartAyah(e.target.value)}
                                     placeholder="Awal"
-                                    class="w-12 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs rounded-xl px-1.5 py-1 text-center font-bold text-slate-800 dark:text-stone-200 outline-none"
+                                    className="w-12 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs rounded-xl px-1.5 py-1 text-center font-bold text-slate-800 dark:text-stone-200 outline-none"
                                   />
-                                  <span class="text-xs text-stone-400">-</span>
+                                  <span className="text-xs text-stone-400">-</span>
                                   <input 
                                     type="number"
                                     min="1"
@@ -1707,20 +1723,20 @@
                                     value={endAyah}
                                     onChange={(e) => setEndAyah(e.target.value)}
                                     placeholder="Akhir"
-                                    class="w-12 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs rounded-xl px-1.5 py-1 text-center font-bold text-slate-800 dark:text-stone-200 outline-none"
+                                    className="w-12 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs rounded-xl px-1.5 py-1 text-center font-bold text-slate-800 dark:text-stone-200 outline-none"
                                   />
                                 </div>
                               )}
 
                               <button
                                 onClick={handleQuranPlayback}
-                                class={`text-xs px-3.5 py-1.5 rounded-xl font-bold transition-all shadow-sm flex items-center ${
+                                className={`text-xs px-3.5 py-1.5 rounded-xl font-bold transition-all shadow-sm flex items-center ${
                                   (isPlayingFullSurah || isPlayingRange) 
                                     ? 'bg-amber-500 text-white animate-pulse' 
                                     : 'bg-emerald-700 text-white hover:bg-emerald-800'
                                 }`}
                               >
-                                <i class={`fa-solid ${(isPlayingFullSurah || isPlayingRange) ? 'fa-pause' : 'fa-play'} mr-1`}></i>
+                                <i className={`fa-solid ${(isPlayingFullSurah || isPlayingRange) ? 'fa-pause' : 'fa-play'} mr-1`}></i>
                                 {(isPlayingFullSurah || isPlayingRange) ? 'Mute' : 'Mulai'}
                               </button>
                             </div>
@@ -1730,32 +1746,32 @@
                       </div>
 
                       {loadingQuran || !surahDetails ? (
-                        <div class="text-center py-10">
-                          <i class="fa-solid fa-spinner animate-spin text-emerald-600 text-2xl"></i>
-                          <p class="text-xs text-stone-400 mt-2">Memuat ayat...</p>
+                        <div className="text-center py-10">
+                          <i className="fa-solid fa-spinner animate-spin text-emerald-600 text-2xl"></i>
+                          <p className="text-xs text-stone-400 mt-2">Memuat ayat...</p>
                         </div>
                       ) : (
-                        <div class="space-y-4 max-h-[500px] overflow-y-auto pr-2 no-scrollbar">
+                        <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 no-scrollbar">
                           {selectedSurah !== 1 && selectedSurah !== 9 && (
-                            <div class="text-center arabic-text text-xl py-4 text-emerald-800">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
+                            <div className="text-center arabic-text text-xl py-4 text-emerald-800">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
                           )}
 
                           {surahDetails.verses.map((verse, vIdx) => (
                             <div 
                               key={verse.number} 
-                              class={`p-4 rounded-2xl border transition-all ${(isPlayingFullSurah || isPlayingRange) && currentFullSurahIndex === vIdx ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-500/35' : 'bg-stone-50 dark:bg-stone-800/40 border-stone-100/50 dark:border-stone-800/40'}`}
+                              className={`p-4 rounded-2xl border transition-all ${(isPlayingFullSurah || isPlayingRange) && currentFullSurahIndex === vIdx ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-500/35' : 'bg-stone-50 dark:bg-stone-800/40 border-stone-100/50 dark:border-stone-800/40'}`}
                             >
-                              <div class="flex items-center justify-between">
-                                <span class="bg-emerald-600/10 text-emerald-600 font-bold text-[10px] w-6 h-6 flex items-center justify-center rounded-lg">{verse.number}</span>
+                              <div className="flex items-center justify-between">
+                                <span className="bg-emerald-600/10 text-emerald-600 font-bold text-[10px] w-6 h-6 flex items-center justify-center rounded-lg">{verse.number}</span>
                                 <button 
                                   onClick={() => handlePlayAudio(verse.audio, verse.number)}
-                                  class={`text-xs p-2 rounded-xl transition-all ${playingAudio && playingAudio.id === verse.number && !isPlayingFullSurah && !isPlayingRange ? 'bg-amber-500 text-white' : 'bg-emerald-600 text-white'}`}
+                                  className={`text-xs p-2 rounded-xl transition-all ${playingAudio && playingAudio.id === verse.number && !isPlayingFullSurah && !isPlayingRange ? 'bg-amber-500 text-white' : 'bg-emerald-600 text-white'}`}
                                 >
-                                  {playingAudio && playingAudio.id === verse.number && !isPlayingFullSurah && !isPlayingRange ? <i class="fa-solid fa-pause"></i> : <i class="fa-solid fa-volume-high"></i>} Play Audio
+                                  {playingAudio && playingAudio.id === verse.number && !isPlayingFullSurah && !isPlayingRange ? <i className="fa-solid fa-pause"></i> : <i className="fa-solid fa-volume-high"></i>} Play Audio
                                 </button>
                               </div>
-                              <div class="arabic-text text-right text-xl font-bold leading-loose text-slate-800 dark:text-stone-100 py-2">{verse.text}</div>
-                              <div class="text-stone-500 dark:text-stone-400 italic text-[11px] leading-relaxed mt-1 text-left">{verse.translation}</div>
+                              <div className="arabic-text text-right text-xl font-bold leading-loose text-slate-800 dark:text-stone-100 py-2">{verse.text}</div>
+                              <div className="text-stone-500 dark:text-stone-400 italic text-[11px] leading-relaxed mt-1 text-left">{verse.translation}</div>
                             </div>
                           ))}
                         </div>
@@ -1765,54 +1781,57 @@
                 </div>
               )}
 
+              {}
+              {/* RADIO TAB CONTENT */}
               {currentTab === 'radio' && (
-                <div class="space-y-4">
-                  <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 flex flex-col h-[500px]">
-                    <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100 mb-3 flex items-center">
-                      <i class="fa-solid fa-radio text-emerald-600 mr-2"></i> Streaming Radio Rodja
+                <div className="space-y-4">
+                  <div className="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 flex flex-col h-[500px]">
+                    <h4 className="font-bold text-sm text-islamic-dark dark:text-stone-100 mb-3 flex items-center">
+                      <i className="fa-solid fa-radio text-emerald-600 mr-2"></i> Streaming Radio Rodja
                     </h4>
-                    <div class="w-full flex-grow rounded-2xl overflow-hidden border border-stone-100 dark:border-stone-800 relative bg-stone-50">
-                      <iframe src="https://www.radiorodja.com/live/" class="absolute top-0 left-0 w-full h-full border-none"></iframe>
+                    <div className="w-full flex-grow rounded-2xl overflow-hidden border border-stone-100 dark:border-stone-800 relative bg-stone-50">
+                      <iframe src="https://www.radiorodja.com/live/" className="absolute top-0 left-0 w-full h-full border-none"></iframe>
                     </div>
                   </div>
                 </div>
               )}
 
-              {}
+              {/* MAKKAH TAB CONTENT - YOUTUBE LINK REPLACED FOR PREMIUM EMBED */}
               {currentTab === 'makkah' && (
-                <div class="space-y-4">
-                  <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 flex flex-col">
-                    <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100 mb-3 flex items-center">
-                      <i class="fa-brands fa-youtube text-red-600 mr-2"></i> Live Makkah Al-Mukarramah
+                <div className="space-y-4">
+                  <div className="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 flex flex-col">
+                    <h4 className="font-bold text-sm text-islamic-dark dark:text-stone-100 mb-3 flex items-center">
+                      <i className="fa-brands fa-youtube text-red-600 mr-2"></i> Live Makkah Al-Mukarramah
                     </h4>
-                    <div class="relative w-full pb-[56.25%] h-0 rounded-2xl overflow-hidden shadow-inner bg-black">
-                      <iframe src="https://www.youtube.com/embed/4H9ywg5G-HI?autoplay=1&mute=1" class="absolute top-0 left-0 w-full h-full border-none" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                    <div className="relative w-full pb-[56.25%] h-0 rounded-2xl overflow-hidden shadow-inner bg-black">
+                      <iframe src="https://www.youtube.com/embed/4H9ywg5G-HI?autoplay=1&mute=1" className="absolute top-0 left-0 w-full h-full border-none" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen></iframe>
                     </div>
                   </div>
                 </div>
               )}
 
+              {/* MADINAH TAB CONTENT */}
               {currentTab === 'madinah' && (
-                <div class="space-y-4">
-                  <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 flex flex-col">
-                    <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100 mb-3 flex items-center">
-                      <i class="fa-brands fa-youtube text-red-600 mr-2"></i> Live Madinah Al-Munawwarah
+                <div className="space-y-4">
+                  <div className="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 flex flex-col">
+                    <h4 className="font-bold text-sm text-islamic-dark dark:text-stone-100 mb-3 flex items-center">
+                      <i className="fa-brands fa-youtube text-red-600 mr-2"></i> Live Madinah Al-Munawwarah
                     </h4>
-                    <div class="relative w-full pb-[56.25%] h-0 rounded-2xl overflow-hidden shadow-inner bg-black">
-                      <iframe src="https://www.youtube.com/embed/i9eWYq0mOS8?autoplay=1&mute=1" class="absolute top-0 left-0 w-full h-full border-none" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                    <div className="relative w-full pb-[56.25%] h-0 rounded-2xl overflow-hidden shadow-inner bg-black">
+                      <iframe src="https://www.youtube.com/embed/i9eWYq0mOS8?autoplay=1&mute=1" className="absolute top-0 left-0 w-full h-full border-none" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen></iframe>
                     </div>
                   </div>
                 </div>
               )}
 
-              {}
+              {/* INFO TAB CONTENT WITH CORRECTED TSTAMP FORMAT AND REVISION COMPONENT */}
               {currentTab === 'info' && (
-                <div class="space-y-4">
-                  <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
-                    <div class="flex items-center justify-between mb-4 pb-3 border-b border-stone-100 dark:border-stone-800">
-                      <div class="flex items-center space-x-2">
-                        <i class="fa-solid fa-bullhorn text-emerald-600"></i>
-                        <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100">Pusat Informasi & Pengumuman Madrasah</h4>
+                <div className="space-y-4">
+                  <div className="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
+                    <div className="flex items-center justify-between mb-4 pb-3 border-b border-stone-100 dark:border-stone-800">
+                      <div className="flex items-center space-x-2">
+                        <i className="fa-solid fa-bullhorn text-emerald-600"></i>
+                        <h4 className="font-bold text-sm text-islamic-dark dark:text-stone-100">Pusat Informasi & Pengumuman Madrasah</h4>
                       </div>
                       {currentUser.role === 'admin' && (
                         <button 
@@ -1821,44 +1840,44 @@
                             setIsEditingInfo(false);
                             setIsInfoModalOpen(true);
                           }}
-                          class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-xl font-bold transition-all shadow-sm"
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-xl font-bold transition-all shadow-sm"
                         >
-                          <i class="fa-solid fa-plus mr-1"></i> Buat Informasi
+                          <i className="fa-solid fa-plus mr-1"></i> Buat Informasi
                         </button>
                       )}
                     </div>
 
-                    <div class="space-y-3 max-h-[500px] overflow-y-auto pr-2 no-scrollbar">
+                    <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 no-scrollbar">
                       {infos.length === 0 ? (
-                        <div class="text-center py-10 text-stone-400 text-xs">Belum ada pengumuman atau informasi resmi saat ini.</div>
+                        <div className="text-center py-10 text-stone-400 text-xs">Belum ada pengumuman atau informasi resmi saat ini.</div>
                       ) : (
                         infos.map((info) => (
-                          <div key={info.id} class="p-4 bg-stone-50/50 dark:bg-stone-850 rounded-2xl border border-stone-100 dark:border-stone-800 flex justify-between items-start space-x-4">
-                            <div class="space-y-1.5 flex-1">
-                              <h5 class="font-bold text-xs text-stone-800 dark:text-stone-100 uppercase tracking-wide">{info.title}</h5>
-                              <p class="text-xs text-stone-600 dark:text-stone-400 leading-relaxed whitespace-pre-wrap">{info.content}</p>
-                              <div class="flex items-center space-x-2 pt-2 text-[10px] text-stone-400 font-medium">
-                                <span><i class="fa-solid fa-clock mr-1"></i> {formatTimestamp(info.timestamp)}</span>
+                          <div key={info.id} className="p-4 bg-stone-50/50 dark:bg-stone-850 rounded-2xl border border-stone-100 dark:border-stone-800 flex justify-between items-start space-x-4">
+                            <div className="space-y-1.5 flex-1">
+                              <h5 className="font-bold text-xs text-stone-800 dark:text-stone-100 uppercase tracking-wide">{info.title}</h5>
+                              <p className="text-xs text-stone-600 dark:text-stone-400 leading-relaxed whitespace-pre-wrap">{info.content}</p>
+                              <div className="flex items-center space-x-2 pt-2 text-[10px] text-stone-400 font-medium">
+                                <span><i className="fa-solid fa-clock mr-1"></i> {formatTimestamp(info.timestamp)}</span>
                                 <span>•</span>
-                                <span><i class="fa-solid fa-user mr-1"></i> Oleh: {info.createdBy}</span>
+                                <span><i className="fa-solid fa-user mr-1"></i> Oleh: {info.createdBy}</span>
                               </div>
                             </div>
 
                             {currentUser.role === 'admin' && (
-                              <div class="flex items-center space-x-2">
+                              <div className="flex items-center space-x-2">
                                 <button
                                   onClick={() => handleEditInfo(info)}
-                                  class="text-xs text-blue-600 hover:text-blue-800 font-bold flex items-center bg-blue-50 dark:bg-blue-950/40 px-2 py-1 rounded-lg"
+                                  className="text-xs text-blue-600 hover:text-blue-800 font-bold flex items-center bg-blue-50 dark:bg-blue-950/40 px-2 py-1 rounded-lg"
                                   title="Revisi Informasi"
                                 >
-                                  <i class="fa-solid fa-edit mr-1"></i> Revisi
+                                  <i className="fa-solid fa-edit mr-1"></i> Revisi
                                 </button>
                                 <button
                                   onClick={() => handleDeleteInfo(info.id)}
-                                  class="text-rose-600 hover:text-rose-800 p-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                                  className="text-rose-600 hover:text-rose-800 p-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40"
                                   title="Hapus Pengumuman"
                                 >
-                                  <i class="fa-solid fa-trash"></i>
+                                  <i className="fa-solid fa-trash"></i>
                                 </button>
                               </div>
                             )}
@@ -1870,43 +1889,44 @@
                 </div>
               )}
 
+              {/* SYSTEM BACKEND SETTINGS TAB */}
               {currentTab === 'settings' && (
-                <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
-                  <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100 flex items-center mb-4">
-                    <i class="fa-solid fa-database text-emerald-600 mr-2"></i> Pengaturan Backend Database
+                <div className="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
+                  <h4 className="font-bold text-sm text-islamic-dark dark:text-stone-100 flex items-center mb-4">
+                    <i className="fa-solid fa-database text-emerald-600 mr-2"></i> Pengaturan Backend Database
                   </h4>
 
-                  <form onSubmit={saveSettings} class="space-y-4">
-                    <div class="bg-slate-50 dark:bg-stone-800/50 p-4 rounded-2xl border border-stone-100 dark:border-stone-800/60 text-xs leading-relaxed text-stone-500 dark:text-stone-400">
-                      <p class="font-bold text-stone-700 dark:text-stone-300 mb-1"><i class="fa-solid fa-circle-info text-emerald-600 mr-1"></i> Bagaimana cara menghubungkan ke Google Sheets?</p>
+                  <form onSubmit={saveSettings} className="space-y-4">
+                    <div className="bg-slate-50 dark:bg-stone-800/50 p-4 rounded-2xl border border-stone-100 dark:border-stone-800/60 text-xs leading-relaxed text-stone-500 dark:text-stone-400">
+                      <p className="font-bold text-stone-700 dark:text-stone-300 mb-1"><i className="fa-solid fa-circle-info text-emerald-600 mr-1"></i> Bagaimana cara menghubungkan ke Google Sheets?</p>
                       <p>Gunakan Google Apps Script untuk membuat Web API Anda sendiri secara gratis. Salin link URL Web App yang dideploy dari Apps Script Anda, paste ke kolom di bawah ini, lalu klik tombol simpan.</p>
                     </div>
 
                     <div>
-                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">URL Google Apps Script Web App API</label>
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">URL Google Apps Script Web App API</label>
                       <input 
                         type="url" 
-                        class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        className="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800 dark:text-stone-100"
                         placeholder="https://script.google.com/macros/s/.../exec"
                         value={apiUrl}
                         onChange={(e) => setApiUrl(e.target.value)}
                       />
                     </div>
 
-                    <div class="flex space-x-2">
+                    <div className="flex space-x-2">
                       <button 
                         type="submit" 
-                        class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs py-3 rounded-xl font-bold transition-all"
+                        className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs py-3 rounded-xl font-bold transition-all"
                       >
-                        <i class="fa-solid fa-cloud-arrow-up mr-1"></i> Simpan URL & Update
+                        <i className="fa-solid fa-cloud-arrow-up mr-1"></i> Simpan URL & Update
                       </button>
                       <button 
                         type="button"
                         onClick={() => syncWithCloud()}
                         disabled={syncing}
-                        class="bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 text-xs px-4 py-3 rounded-xl font-bold hover:bg-stone-200 transition-all disabled:opacity-50"
+                        className="bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 text-xs px-4 py-3 rounded-xl font-bold hover:bg-stone-200 transition-all disabled:opacity-50"
                       >
-                        {syncing ? <i class="fa-solid fa-spinner animate-spin"></i> : <i class="fa-solid fa-rotate mr-1"></i>} Sinkronisasi
+                        {syncing ? <i className="fa-solid fa-spinner animate-spin"></i> : <i className="fa-solid fa-rotate mr-1"></i>} Sinkronisasi
                       </button>
                     </div>
                   </form>
@@ -1917,28 +1937,29 @@
           )}
 
           {}
+          {/* ADD / EDIT ACTIVITY MODAL WITH PIC DROPDOWN */}
           {isModalOpen && (
-            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-              <div class="w-full max-w-md bg-white dark:bg-stone-900 rounded-3xl shadow-2xl border border-stone-100 dark:border-stone-800 overflow-hidden p-6 relative">
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <div className="w-full max-w-md bg-white dark:bg-stone-900 rounded-3xl shadow-2xl border border-stone-100 dark:border-stone-800 overflow-hidden p-6 relative">
                 <button 
                   onClick={() => setIsModalOpen(false)}
-                  class="absolute top-4 right-4 text-stone-400 hover:text-stone-600"
+                  className="absolute top-4 right-4 text-stone-400 hover:text-stone-600"
                 >
-                  <i class="fa-solid fa-circle-xmark text-xl"></i>
+                  <i className="fa-solid fa-circle-xmark text-xl"></i>
                 </button>
 
-                <h3 class="text-base font-bold text-islamic-dark dark:text-stone-100 mb-4 flex items-center">
-                  <i class="fa-solid fa-calendar-plus text-emerald-600 mr-2"></i> {isEditing ? 'Ubah Rencana Kerja' : 'Tambah Rencana Kerja Baru'}
+                <h3 className="text-base font-bold text-islamic-dark dark:text-stone-100 mb-4 flex items-center">
+                  <i className="fa-solid fa-calendar-plus text-emerald-600 mr-2"></i> {isEditing ? 'Ubah Rencana Kerja' : 'Tambah Rencana Kerja Baru'}
                 </h3>
 
-                <form onSubmit={handleSaveActivity} class="space-y-4 text-xs text-left">
+                <form onSubmit={handleSaveActivity} className="space-y-4 text-xs text-left">
                   <div>
-                    <label class="block text-[10px] font-bold uppercase text-stone-400 mb-1">Uraian Rencana Kerja (Max 100 Kata)</label>
+                    <label className="block text-[10px] font-bold uppercase text-stone-400 mb-1">Uraian Rencana Kerja (Max 100 Kata)</label>
                     <textarea 
                       required
-                      maxLength="800"
-                      rows="3"
-                      class="w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      maxLength={800}
+                      rows={3}
+                      className="w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-800 dark:text-stone-100"
                       placeholder="Uraian detail tugas sekolah..."
                       value={activityForm.task}
                       onChange={(e) => setActivityForm({ ...activityForm, task: e.target.value })}
@@ -1946,11 +1967,11 @@
                   </div>
 
                   <div>
-                    <label class="block text-[10px] font-bold uppercase text-stone-400 mb-1">Sub-Aktifitas</label>
+                    <label className="block text-[10px] font-bold uppercase text-stone-400 mb-1">Sub-Aktifitas</label>
                     <input 
                       type="text"
                       required
-                      class="w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      className="w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-800 dark:text-stone-100"
                       placeholder="Sub kegiatan penunjang..."
                       value={activityForm.subActivity}
                       onChange={(e) => setActivityForm({ ...activityForm, subActivity: e.target.value })}
@@ -1958,10 +1979,10 @@
                   </div>
 
                   <div>
-                    <label class="block text-[10px] font-bold uppercase text-stone-400 mb-1">Penanggung Jawab (PIC)</label>
+                    <label className="block text-[10px] font-bold uppercase text-stone-400 mb-1">Penanggung Jawab (PIC)</label>
                     <select 
                       required
-                      class="w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-850 dark:text-white"
+                      className="w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-850 dark:text-stone-200"
                       value={activityForm.pic}
                       onChange={(e) => setActivityForm({ ...activityForm, pic: e.target.value })}
                     >
@@ -1972,29 +1993,30 @@
                           <option key={u.username} value={u.username}>{u.username}</option>
                         ))
                       }
+                      {/* Safety fallback if existing PIC is not matching locally */}
                       {activityForm.pic && !users.some(u => u.username === activityForm.pic && u.role === 'admin') && (
                         <option value={activityForm.pic}>{activityForm.pic}</option>
                       )}
                     </select>
                   </div>
 
-                  <div class="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label class="block text-[10px] font-bold uppercase text-stone-400 mb-1">Tanggal Mulai</label>
+                      <label className="block text-[10px] font-bold uppercase text-stone-400 mb-1">Tanggal Mulai</label>
                       <input 
                         type="date"
                         required
-                        class="w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                        className="w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-800 dark:text-stone-100"
                         value={activityForm.startDate}
                         onChange={(e) => setActivityForm({ ...activityForm, startDate: e.target.value })}
                       />
                     </div>
                     <div>
-                      <label class="block text-[10px] font-bold uppercase text-stone-400 mb-1">Target Selesai</label>
+                      <label className="block text-[10px] font-bold uppercase text-stone-400 mb-1">Target Selesai</label>
                       <input 
                         type="date"
                         required
-                        class="w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                        className="w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-800 dark:text-stone-100"
                         value={activityForm.endDate}
                         onChange={(e) => setActivityForm({ ...activityForm, endDate: e.target.value })}
                       />
@@ -2002,15 +2024,15 @@
                   </div>
 
                   <div>
-                    <div class="flex justify-between items-center mb-1">
-                      <label class="block text-[10px] font-bold uppercase text-stone-400">Progress Pencapaian (%): {activityForm.progress}%</label>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="block text-[10px] font-bold uppercase text-stone-400">Progress Pencapaian (%): {activityForm.progress}%</label>
                     </div>
                     <input 
                       type="range"
                       min="0"
                       max="100"
                       step="5"
-                      class="w-full accent-emerald-600 bg-stone-100 h-1.5 rounded-lg"
+                      className="w-full accent-emerald-600 bg-stone-100 h-1.5 rounded-lg"
                       value={activityForm.progress}
                       onChange={(e) => setActivityForm({ ...activityForm, progress: Number(e.target.value) })}
                     />
@@ -2018,121 +2040,121 @@
 
                   <button 
                     type="submit" 
-                    class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-islamic-mint text-white font-bold transition-all shadow-lg"
+                    className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-islamic-mint text-white font-bold transition-all shadow-lg"
                   >
-                    <i class="fa-solid fa-save mr-1"></i> Simpan Agenda Kerja
+                    <i className="fa-solid fa-save mr-1"></i> Simpan Rencana Kerja
                   </button>
                 </form>
               </div>
             </div>
           )}
 
-          {}
+          {/* ADD / EDIT INFO MODAL */}
           {isInfoModalOpen && (
-            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-              <div class="w-full max-w-md bg-white dark:bg-stone-900 rounded-3xl shadow-2xl border border-stone-100 dark:border-stone-800 overflow-hidden p-6 relative">
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <div className="w-full max-w-md bg-white dark:bg-stone-900 rounded-3xl shadow-2xl border border-stone-100 dark:border-stone-800 overflow-hidden p-6 relative">
                 <button 
                   onClick={() => { setIsInfoModalOpen(false); setInfoForm({ id: '', title: '', content: '' }); setIsEditingInfo(false); }}
-                  class="absolute top-4 right-4 text-stone-400 hover:text-stone-600"
+                  className="absolute top-4 right-4 text-stone-400 hover:text-stone-600"
                 >
-                  <i class="fa-solid fa-circle-xmark text-xl"></i>
+                  <i className="fa-solid fa-circle-xmark text-xl"></i>
                 </button>
 
-                <h3 class="text-base font-bold text-islamic-dark dark:text-stone-100 mb-4 flex items-center">
-                  <i class="fa-solid fa-bullhorn text-emerald-600 mr-2"></i> {isEditingInfo ? 'Revisi Pengumuman' : 'Tambah Informasi Baru'}
+                <h3 className="text-base font-bold text-islamic-dark dark:text-stone-100 mb-4 flex items-center">
+                  <i className="fa-solid fa-bullhorn text-emerald-600 mr-2"></i> {isEditingInfo ? 'Revisi Pengumuman' : 'Tambah Informasi Baru'}
                 </h3>
 
-                <form onSubmit={handleSaveInfo} class="space-y-4 text-xs text-left">
+                <form onSubmit={handleSaveInfo} className="space-y-4 text-xs text-left">
                   <div>
-                    <label class="block text-[10px] font-bold uppercase text-stone-400 mb-1">Kotak Judul (Max 50 Karakter)</label>
+                    <label className="block text-[10px] font-bold uppercase text-stone-400 mb-1">Kotak Judul (Max 50 Karakter)</label>
                     <input 
                       type="text"
                       required
-                      maxLength="50"
-                      class="w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      maxLength={50}
+                      className="w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-800 dark:text-stone-100"
                       placeholder="Contoh: Pengumuman Rapat Wali Murid"
                       value={infoForm.title}
                       onChange={(e) => setInfoForm({ ...infoForm, title: e.target.value })}
                     />
-                    <span class="text-[9px] text-stone-400 block mt-0.5 text-right">{infoForm.title.length}/50 karakter</span>
+                    <span className="text-[9px] text-stone-400 block mt-0.5 text-right">{infoForm.title.length}/50 karakter</span>
                   </div>
 
                   <div>
-                    <label class="block text-[10px] font-bold uppercase text-stone-400 mb-1">Kotak Informasi (Max 500 Karakter)</label>
+                    <label className="block text-[10px] font-bold uppercase text-stone-400 mb-1">Kotak Informasi (Max 500 Karakter)</label>
                     <textarea 
                       required
-                      maxLength="500"
-                      rows="5"
-                      class="w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      maxLength={500}
+                      rows={5}
+                      className="w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-800 dark:text-stone-100"
                       placeholder="Isi informasi lengkap di sini..."
                       value={infoForm.content}
                       onChange={(e) => setInfoForm({ ...infoForm, content: e.target.value })}
                     />
-                    <span class="text-[9px] text-stone-400 block mt-0.5 text-right">{infoForm.content.length}/500 karakter</span>
+                    <span className="text-[9px] text-stone-400 block mt-0.5 text-right">{infoForm.content.length}/500 karakter</span>
                   </div>
 
-                  <div class="bg-slate-50 dark:bg-stone-800 p-3 rounded-xl border border-stone-100 dark:border-stone-700 text-[10px] text-stone-500">
-                    <i class="fa-solid fa-clock mr-1"></i> Tanggal & Jam Sistem Saat Ini: <span class="font-bold">{formatDateStr(new Date().toISOString().split('T')[0])} {String(new Date().getHours()).padStart(2, '0')}:{String(new Date().getMinutes()).padStart(2, '0')}</span>
+                  <div className="bg-slate-50 dark:bg-stone-800 p-3 rounded-xl border border-stone-100 dark:border-stone-700 text-[10px] text-stone-500">
+                    <i className="fa-solid fa-clock mr-1"></i> Tanggal & Jam Sistem Saat Ini: <span className="font-bold">{formatDateStr(new Date().toISOString().split('T')[0])} {String(new Date().getHours()).padStart(2, '0')}:{String(new Date().getMinutes()).padStart(2, '0')}</span>
                   </div>
 
                   <button 
                     type="submit" 
-                    class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-islamic-mint text-white font-bold transition-all shadow-lg"
+                    className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-islamic-mint text-white font-bold transition-all shadow-lg"
                   >
-                    <i class="fa-solid fa-paper-plane mr-1"></i> {isEditingInfo ? 'Simpan Revisi Informasi' : 'Publikasikan Informasi'}
+                    <i className="fa-solid fa-paper-plane mr-1"></i> {isEditingInfo ? 'Simpan Revisi Informasi' : 'Publikasikan Informasi'}
                   </button>
                 </form>
               </div>
             </div>
           )}
 
-          {}
+          {/* DETAIL & TASK DESCRIPTION / KETERANGAN MODAL */}
           {keteranganModal.isOpen && keteranganModal.todo && (
-            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-              <div class="w-full max-w-md bg-white dark:bg-stone-900 rounded-3xl shadow-2xl border border-stone-100 dark:border-stone-800 overflow-hidden p-6 relative">
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <div className="w-full max-w-md bg-white dark:bg-stone-900 rounded-3xl shadow-2xl border border-stone-100 dark:border-stone-800 overflow-hidden p-6 relative">
                 <button 
                   onClick={() => setKeteranganModal({ isOpen: false, todo: null, text: '' })}
-                  class="absolute top-4 right-4 text-stone-400 hover:text-stone-600"
+                  className="absolute top-4 right-4 text-stone-400 hover:text-stone-600"
                 >
-                  <i class="fa-solid fa-circle-xmark text-xl"></i>
+                  <i className="fa-solid fa-circle-xmark text-xl"></i>
                 </button>
 
-                <h3 class="text-base font-bold text-islamic-dark dark:text-stone-100 mb-4 flex items-center">
-                  <i class="fa-solid fa-file-signature text-emerald-600 mr-2"></i> Detail & Keterangan Aktifitas
+                <h3 className="text-base font-bold text-islamic-dark dark:text-stone-100 mb-4 flex items-center">
+                  <i className="fa-solid fa-file-signature text-emerald-600 mr-2"></i> Detail & Keterangan Aktifitas
                 </h3>
 
-                <div class="mb-4 p-3 bg-stone-50 dark:bg-stone-800 rounded-xl border border-stone-100 dark:border-stone-700">
-                  <div class="font-bold text-sm text-stone-800 dark:text-stone-100">{keteranganModal.todo.task}</div>
-                  <div class="text-xs text-stone-500 mt-1">{keteranganModal.todo.subActivity}</div>
+                <div className="mb-4 p-3 bg-stone-50 dark:bg-stone-800 rounded-xl border border-stone-100 dark:border-stone-700">
+                  <div className="font-bold text-sm text-stone-800 dark:text-stone-100">{keteranganModal.todo.task}</div>
+                  <div className="text-xs text-stone-500 mt-1">{keteranganModal.todo.subActivity}</div>
                 </div>
 
                 {currentUser.role === 'admin' ? (
-                  <form onSubmit={submitKeterangan} class="space-y-4 text-xs text-left">
+                  <form onSubmit={submitKeterangan} className="space-y-4 text-xs text-left">
                     <div>
-                      <label class="block text-[10px] font-bold uppercase text-stone-400 mb-1">Keterangan (Max 100 Karakter)</label>
+                      <label className="block text-[10px] font-bold uppercase text-stone-400 mb-1">Keterangan (Max 100 Karakter)</label>
                       <textarea 
                         required
-                        maxLength="100"
-                        rows="3"
-                        class="w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                        maxLength={100}
+                        rows={3}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-800 dark:text-stone-100"
                         placeholder="Masukkan keterangan pencapaian..."
                         value={keteranganModal.text}
                         onChange={(e) => setKeteranganModal({ ...keteranganModal, text: e.target.value })}
                       />
-                      <span class="text-[9px] text-stone-400 block mt-0.5 text-right">{keteranganModal.text.length}/100 karakter</span>
+                      <span className="text-[9px] text-stone-400 block mt-0.5 text-right">{keteranganModal.text.length}/100 karakter</span>
                     </div>
 
                     <button 
                       type="submit" 
-                      class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-islamic-mint text-white font-bold transition-all shadow-lg"
+                      className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-islamic-mint text-white font-bold transition-all shadow-lg"
                     >
-                      <i class="fa-solid fa-save mr-1"></i> Simpan Keterangan
+                      <i className="fa-solid fa-save mr-1"></i> Simpan Keterangan
                     </button>
                   </form>
                 ) : (
-                  <div class="space-y-2 text-xs">
-                    <label class="block text-[10px] font-bold uppercase text-stone-400">Keterangan Pencapaian:</label>
-                    <div class="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-200 border border-emerald-100 dark:border-emerald-800/50 italic">
+                  <div className="space-y-2 text-xs">
+                    <label className="block text-[10px] font-bold uppercase text-stone-400">Keterangan Pencapaian:</label>
+                    <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-200 border border-emerald-100 dark:border-emerald-800/50 italic">
                       {keteranganModal.todo.keterangan ? keteranganModal.todo.keterangan : "Belum ada keterangan pencapaian kerja."}
                     </div>
                   </div>
@@ -2141,7 +2163,7 @@
             </div>
           )}
 
-          <footer class="fixed bottom-0 left-0 right-0 py-2.5 bg-islamic-dark text-slate-300 text-center text-[10px] tracking-widest font-semibold border-t border-emerald-950/40 z-20 shadow-lg">
+          <footer className="fixed bottom-0 left-0 right-0 py-2.5 bg-islamic-dark text-slate-300 text-center text-[10px] tracking-widest font-semibold border-t border-emerald-950/40 z-20 shadow-lg">
             CREATED BY RAFLIANO
           </footer>
         </div>
