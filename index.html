@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>manicalendar - Manajemen Aktifitas Madrasah</title>
   
-  <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -115,11 +114,15 @@
       const [currentPage, setCurrentPage] = useState(1);
       const rowsPerPage = 10;
 
-      // Custom Alert Toast & Confirmation States (Replacing system alerts)
+      // Toast Notification States (Replacing standard browser alerts)
       const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
       const [confirmModal, setConfirmModal] = useState({ isOpen: false, message: '', action: null });
       const [isUrlModalOpen, setIsUrlModalOpen] = useState(false);
       const [customUrlInput, setCustomUrlInput] = useState('');
+
+      // Password Toggle states
+      const [showPassword, setShowPassword] = useState(false);
+      const [showRegPassword, setShowRegPassword] = useState(false);
 
       // Authentication States
       const [isRegisterMode, setIsRegisterMode] = useState(false);
@@ -146,7 +149,9 @@
 
       // Info Form Modal State
       const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+      const [isEditingInfo, setIsEditingInfo] = useState(false);
       const [infoForm, setInfoForm] = useState({
+        id: '',
         title: '',
         content: ''
       });
@@ -154,7 +159,7 @@
       // Keterangan Modal State
       const [keteranganModal, setKeteranganModal] = useState({ isOpen: false, todo: null, text: '' });
 
-      // Quran Component States
+      // Quran Component States & Advanced Qari Lists
       const [quranSurahs, setQuranSurahs] = useState([]);
       const [selectedSurah, setSelectedSurah] = useState(null);
       const [surahDetails, setSurahDetails] = useState(null);
@@ -164,11 +169,22 @@
       const [isPlayingFullSurah, setIsPlayingFullSurah] = useState(false);
       const [currentFullSurahIndex, setCurrentFullSurahIndex] = useState(0);
       
-      // New states for Range (Ayat Tertentu) Playback
       const [quranPlayMode, setQuranPlayMode] = useState('full'); // 'full' | 'range'
       const [startAyah, setStartAyah] = useState('');
       const [endAyah, setEndAyah] = useState('');
       const [isPlayingRange, setIsPlayingRange] = useState(false);
+      const [selectedQari, setSelectedQari] = useState('ar.alafasy');
+
+      const qariList = [
+        { name: 'Misyari Al-Afasy', id: 'ar.alafasy' },
+        { name: 'Abdurrahman As-Sudais', id: 'ar.abdurrahmaansudais' },
+        { name: 'Maher Al-Muaiqly', id: 'ar.mahermuaiqly' },
+        { name: 'Ali Al-Hudhaify', id: 'ar.hudhaify' },
+        { name: 'Mahmoud Khalil Al-Husary', id: 'ar.husary' },
+        { name: 'Saad Al-Ghamdi', id: 'ar.saadalgamdi' },
+        { name: 'Abdul Basit Abdul Samad', id: 'ar.abdulbasitmurattal' },
+        { name: 'Mohamed Siddiq El-Minshawi', id: 'ar.minshawi' }
+      ];
       
       const audioRef = useRef(null);
 
@@ -184,7 +200,6 @@
         { id: '2', title: 'Kebersihan Lingkungan Madrasah', content: 'Kerja bakti rutin hari Jumat akan difokuskan pada area halaman depan dan ruang kelas baru.', timestamp: '01-06-2026 10:30', createdBy: 'admin' }
       ];
 
-      // Theme toggle handler
       useEffect(() => {
         const rootClass = document.documentElement.classList;
         if (theme === 'dark') {
@@ -194,16 +209,6 @@
         }
         localStorage.setItem('theme', theme);
       }, [theme]);
-
-      // Stop and reset audio whenever active tab changes to prevent overlapping
-      useEffect(() => {
-        if (audioRef.current) {
-          audioRef.current.pause();
-        }
-        setIsPlayingFullSurah(false);
-        setIsPlayingRange(false);
-        setPlayingAudio(null);
-      }, [currentTab]);
 
       const showToast = (message, type = 'success') => {
         setToast({ show: true, message, type });
@@ -227,24 +232,18 @@
         if (!dateStr) return null;
         try {
           const str = dateStr.toString().trim();
-          
-          // Jika string merupakan format ISO dengan pembatas "T" (misal dari Database)
           if (str.includes('T')) {
             const d = new Date(str);
             if (!isNaN(d.getTime())) return d;
           }
-          
-          // Jika string merupakan format YYYY-MM-DD atau DD-MM-YYYY tanpa "T"
           const parts = str.split(/[-/]/);
           if (parts.length === 3) {
-            // Cek jika YYYY berada di bagian pertama (YYYY-MM-DD)
             if (parts[0].length === 4) {
               const y = parseInt(parts[0], 10);
               const m = parseInt(parts[1], 10) - 1;
               const d = parseInt(parts[2], 10);
               return new Date(y, m, d);
             }
-            // Cek jika YYYY berada di bagian terakhir (DD-MM-YYYY)
             if (parts[2].length === 4) {
               const y = parseInt(parts[2], 10);
               const m = parseInt(parts[1], 10) - 1;
@@ -252,7 +251,6 @@
               return new Date(y, m, d);
             }
           }
-          
           const fallbackD = new Date(str);
           if (!isNaN(fallbackD.getTime())) return fallbackD;
         } catch (e) {
@@ -281,6 +279,28 @@
         return `${year}-${month}-${day}`;
       };
 
+      // Perfect formatting of ISO Date or local Timestamp in Infos to dd-mm-yyyy hh:mm
+      const formatTimestamp = (ts) => {
+        if (!ts) return '';
+        try {
+          const tsStr = ts.toString().trim();
+          if (tsStr.includes('T') || tsStr.includes('Z')) {
+            const d = new Date(tsStr);
+            if (!isNaN(d.getTime())) {
+              const day = String(d.getDate()).padStart(2, '0');
+              const month = String(d.getMonth() + 1).padStart(2, '0');
+              const year = d.getFullYear();
+              const hours = String(d.getHours()).padStart(2, '0');
+              const minutes = String(d.getMinutes()).padStart(2, '0');
+              return `${day}-${month}-${year} ${hours}:${minutes}`;
+            }
+          }
+          return tsStr;
+        } catch (e) {
+          return ts;
+        }
+      };
+
       const syncWithCloud = async (urlToUse = apiUrl) => {
         if (!urlToUse || urlToUse === defaultGasUrl) {
           const localT = localStorage.getItem('local_todos');
@@ -295,7 +315,6 @@
 
         setSyncing(true);
         try {
-          // Sync Agenda Rencana Kerja
           const todosRes = await fetch(`${urlToUse}?action=getTodos`);
           const todosData = await todosRes.json();
           if (todosData.status === 'success') {
@@ -306,7 +325,6 @@
             throw new Error(todosData.message);
           }
 
-          // Sync Papan Informasi
           const infoRes = await fetch(`${urlToUse}?action=getInfos`);
           const infoData = await infoRes.json();
           if (infoData.status === 'success') {
@@ -314,7 +332,6 @@
             localStorage.setItem('local_infos', JSON.stringify(infoData.data));
           }
 
-          // Sync Data Pengguna (Untuk pic dropdown admin)
           const usersRes = await fetch(`${urlToUse}?action=getUsers`);
           const usersData = await usersRes.json();
           if (usersData.status === 'success') {
@@ -343,44 +360,14 @@
         loadQuranSurahs();
       }, [apiUrl]);
 
-      useEffect(() => {
-        const localUsers = localStorage.getItem('local_users');
-        if (!localUsers) {
-          const defaultUsers = [
-            { username: 'admin', email: 'admin@manicalendar.com', password: '123', role: 'admin' },
-            { username: 'rafliano', email: 'rafli@school.id', password: '123', role: 'admin' },
-            { username: 'guru1', email: 'guru@school.id', password: '123', role: 'user' }
-          ];
-          localStorage.setItem('local_users', JSON.stringify(defaultUsers));
-          setUsers(defaultUsers);
-        } else {
-          setUsers(JSON.parse(localUsers));
-        }
-      }, []);
-
-      const loadQuranSurahs = async () => {
-        setLoadingQuran(true);
-        try {
-          const res = await fetch('https://api.alquran.cloud/v1/surah');
-          const data = await res.json();
-          if (data.code === 200) {
-            setQuranSurahs(data.data);
-          }
-        } catch (err) {
-          console.error("Gagal memuat surat Al-Quran", err);
-        } finally {
-          setLoadingQuran(false);
-        }
-      };
-
-      const viewSurahDetails = async (surahNumber) => {
+      const viewSurahDetails = async (surahNumber, qariId = selectedQari) => {
         setLoadingQuran(true);
         setIsPlayingFullSurah(false);
         setIsPlayingRange(false);
         setStartAyah('');
         setEndAyah('');
         try {
-          const resAr = await fetch(`https://api.alquran.cloud/v1/surah/${surahNumber}/editions/quran-uthmani,id.indonesian,ar.alafasy`);
+          const resAr = await fetch(`https://api.alquran.cloud/v1/surah/${surahNumber}/editions/quran-uthmani,id.indonesian,${qariId}`);
           const data = await resAr.json();
           if (data.code === 200) {
             setSurahDetails({
@@ -396,6 +383,7 @@
           }
         } catch (err) {
           console.error("Gagal memuat detail surat", err);
+          showToast("Gagal memuat ayat Al-Quran dengan Qari ini.", "error");
         } finally {
           setLoadingQuran(false);
         }
@@ -418,6 +406,7 @@
         }
       };
 
+      // Infinite Repeat Full Surah Playback
       const handlePlayFullSurah = () => {
         if (!surahDetails || surahDetails.verses.length === 0) return;
         if (isPlayingFullSurah) {
@@ -432,9 +421,10 @@
       };
 
       const playSurahVerse = (index) => {
+        if (!isPlayingFullSurah) return;
         if (index >= surahDetails.verses.length) {
-          setIsPlayingFullSurah(false);
-          setPlayingAudio(null);
+          // Loop back to first verse (index 0) endlessly for Murajaah
+          playSurahVerse(0);
           return;
         }
         
@@ -446,19 +436,22 @@
         }
         
         audioRef.current = new Audio(verse.audio);
-        audioRef.current.play();
+        audioRef.current.play().catch(e => console.log("Playback error: ", e));
         setPlayingAudio({ url: verse.audio, id: verse.number });
         audioRef.current.onended = () => {
           playSurahVerse(index + 1);
         };
       };
 
-      // Play specific verse range recursively
+      // Infinite Repeat Range Playback
       const playSurahVerseRange = (currIndex, endIndex) => {
+        if (!isPlayingRange) return;
+        const startVal = parseInt(startAyah, 10) || 1;
+        const endVal = parseInt(endAyah, 10) || surahDetails.info.numberOfAyahs;
+
         if (currIndex > endIndex || currIndex >= surahDetails.verses.length) {
-          setIsPlayingRange(false);
-          setPlayingAudio(null);
-          showToast('Selesai memutar rentang ayat pilihan!', 'success');
+          // Loop back to the start of range endlessly
+          playSurahVerseRange(startVal - 1, endVal - 1);
           return;
         }
 
@@ -470,14 +463,13 @@
         }
 
         audioRef.current = new Audio(verse.audio);
-        audioRef.current.play();
+        audioRef.current.play().catch(e => console.log("Playback error: ", e));
         setPlayingAudio({ url: verse.audio, id: verse.number });
         audioRef.current.onended = () => {
           playSurahVerseRange(currIndex + 1, endIndex);
         };
       };
 
-      // Unified playback handler based on active dropdown selection
       const handleQuranPlayback = () => {
         if (!surahDetails || surahDetails.verses.length === 0) return;
 
@@ -492,7 +484,6 @@
             const startVal = parseInt(startAyah, 10);
             const endVal = parseInt(endAyah, 10) || surahDetails.info.numberOfAyahs;
             
-            // Validations for start & end ayahs
             if (isNaN(startVal) || startVal < 1 || startVal > surahDetails.info.numberOfAyahs) {
               showToast(`Nomor ayat awal tidak valid! (1 s/d ${surahDetails.info.numberOfAyahs})`, 'error');
               return;
@@ -516,6 +507,11 @@
 
         if (!regForm.username || !regForm.email || !regForm.password) {
           setAuthError('Mohon isi semua field registrasi!');
+          return;
+        }
+
+        if (regForm.password.length < 3) {
+          setAuthError('Password minimal harus memiliki panjang 3 karakter!');
           return;
         }
 
@@ -580,6 +576,11 @@
         
         if (!loginForm.username || !loginForm.password) {
           setAuthError('Mohon isi username dan password!');
+          return;
+        }
+
+        if (loginForm.password.length < 3) {
+          setAuthError('Password minimal harus memiliki panjang 3 karakter!');
           return;
         }
 
@@ -651,12 +652,13 @@
         }
         setPlayingAudio(null);
         setIsPlayingFullSurah(false);
+        setIsPlayingRange(false);
       };
 
       const handleSaveActivity = async (e) => {
         e.preventDefault();
         if (currentUser.role !== 'admin') {
-          showToast('Hanya Administrator yang dapat merubah rencana kerja!', 'error');
+          showToast('Hanya Administrator yang dapat memanipulasi rencana kerja!', 'error');
           return;
         }
 
@@ -720,7 +722,7 @@
       const handleSaveInfo = async (e) => {
         e.preventDefault();
         if (currentUser.role !== 'admin') {
-          showToast('Hanya Administrator yang dapat menambahkan informasi!', 'error');
+          showToast('Hanya Administrator yang dapat menambahkan/mengubah pengumuman informasi!', 'error');
           return;
         }
 
@@ -731,7 +733,7 @@
 
         const payload = {
           action: 'saveInfo',
-          id: Date.now().toString(),
+          id: infoForm.id || Date.now().toString(),
           title: infoForm.title,
           content: infoForm.content,
           timestamp: timestamp,
@@ -750,8 +752,9 @@
             const data = await res.json();
             if (data.status === 'success') {
               setIsInfoModalOpen(false);
-              setInfoForm({ title: '', content: '' });
-              showToast('Pengumuman berhasil dipublikasikan!', 'success');
+              setInfoForm({ id: '', title: '', content: '' });
+              setIsEditingInfo(false);
+              showToast(isEditingInfo ? 'Pengumuman berhasil direvisi!' : 'Pengumuman berhasil dipublikasikan!', 'success');
               syncWithCloud();
             } else {
               showToast('Gagal menyimpan informasi: ' + data.message, 'error');
@@ -769,12 +772,30 @@
 
       const saveInfoLocally = (payload) => {
         const localList = JSON.parse(localStorage.getItem('local_infos') || JSON.stringify(fallbackInfos));
-        const updatedList = [payload, ...localList];
+        let updatedList;
+        const existsIdx = localList.findIndex(i => i.id.toString() === payload.id.toString());
+        if (existsIdx !== -1) {
+          updatedList = [...localList];
+          updatedList[existsIdx] = payload;
+        } else {
+          updatedList = [payload, ...localList];
+        }
         setInfos(updatedList);
         localStorage.setItem('local_infos', JSON.stringify(updatedList));
         setIsInfoModalOpen(false);
-        setInfoForm({ title: '', content: '' });
+        setInfoForm({ id: '', title: '', content: '' });
+        setIsEditingInfo(false);
         showToast('Informasi disimpan secara lokal!', 'success');
+      };
+
+      const handleEditInfo = (info) => {
+        setInfoForm({
+          id: info.id,
+          title: info.title,
+          content: info.content
+        });
+        setIsEditingInfo(true);
+        setIsInfoModalOpen(true);
       };
 
       const handleDeleteActivity = (activityId) => {
@@ -1002,7 +1023,7 @@
       return (
         <div class="flex-grow flex flex-col min-h-screen relative">
           
-          {/* Custom Notification Toast Component */}
+          {}
           {toast.show && (
             <div class="fixed top-20 right-4 z-50 animate-bounce">
               <div class={`px-4 py-3 rounded-2xl shadow-2xl flex items-center space-x-3 text-white border ${
@@ -1016,7 +1037,6 @@
             </div>
           )}
 
-          {/* Custom Confirmation Modal */}
           {confirmModal.isOpen && (
             <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
               <div class="w-full max-w-sm bg-white dark:bg-stone-900 rounded-3xl p-6 border border-stone-100 dark:border-stone-800 shadow-2xl text-center">
@@ -1043,7 +1063,6 @@
             </div>
           )}
 
-          {/* Custom URL database setup modal */}
           {isUrlModalOpen && (
             <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
               <div class="w-full max-w-md bg-white dark:bg-stone-900 rounded-3xl p-6 border border-stone-100 dark:border-stone-800 shadow-2xl">
@@ -1051,7 +1070,6 @@
                   <i class="fa-solid fa-database text-emerald-600 mr-2"></i> Pengaturan URL Database
                 </h3>
                 <p class="text-xs text-stone-500 dark:text-stone-400 mb-4">Masukkan tautan Web API Google Apps Script Anda untuk mengaktifkan sinkronisasi Cloud.</p>
-                
                 <input 
                   type="url"
                   class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950 text-xs focus:outline-none mb-4"
@@ -1059,14 +1077,8 @@
                   value={customUrlInput}
                   onChange={(e) => setCustomUrlInput(e.target.value)}
                 />
-                
                 <div class="flex space-x-2">
-                  <button 
-                    onClick={() => setIsUrlModalOpen(false)}
-                    class="flex-1 py-2.5 rounded-xl border border-stone-200 text-xs font-bold text-stone-500"
-                  >
-                    Tutup
-                  </button>
+                  <button onClick={() => setIsUrlModalOpen(false)} class="flex-1 py-2.5 rounded-xl border border-stone-200 text-xs font-bold text-stone-500">Tutup</button>
                   <button 
                     onClick={() => {
                       setApiUrl(customUrlInput);
@@ -1137,7 +1149,7 @@
                     <i class="fa-solid fa-calendar-check text-3xl"></i>
                   </div>
                   <h2 class="text-2xl font-extrabold text-islamic-dark dark:text-stone-100">Selamat Datang di manICalendar</h2>
-                  <p class="text-xs text-stone-500 dark:text-stone-400 mt-1">Platform Manajemen & Agenda Madrasah </p>
+                  <p class="text-xs text-stone-500 dark:text-stone-400 mt-1">Platform Manajemen Aktivitas & Agenda Madrasah</p>
                 </div>
 
                 {authError && (
@@ -1159,7 +1171,7 @@
                       <input 
                         type="text" 
                         required
-                        class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs"
                         placeholder="Contoh: Rafliano"
                         value={regForm.username}
                         onChange={(e) => setRegForm({ ...regForm, username: e.target.value })}
@@ -1170,22 +1182,32 @@
                       <input 
                         type="email" 
                         required
-                        class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs"
                         placeholder="Contoh: rafli@school.id"
                         value={regForm.email}
                         onChange={(e) => setRegForm({ ...regForm, email: e.target.value })}
                       />
                     </div>
                     <div>
-                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Password</label>
-                      <input 
-                        type="password" 
-                        required
-                        class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                        placeholder="••••••••"
-                        value={regForm.password}
-                        onChange={(e) => setRegForm({ ...regForm, password: e.target.value })}
-                      />
+                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Password (Min 3 Karakter)</label>
+                      <div class="relative">
+                        <input 
+                          type={showRegPassword ? "text" : "password"} 
+                          required
+                          minLength="3"
+                          class="w-full px-4 py-3 pr-10 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs"
+                          placeholder="••••••••"
+                          value={regForm.password}
+                          onChange={(e) => setRegForm({ ...regForm, password: e.target.value })}
+                        />
+                        <button 
+                          type="button" 
+                          onClick={() => setShowRegPassword(!showRegPassword)}
+                          class="absolute right-3 top-3 text-stone-400 hover:text-stone-600 dark:hover:text-white"
+                        >
+                          <i class={`fa-solid ${showRegPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                        </button>
+                      </div>
                     </div>
                     
                     <button 
@@ -1208,22 +1230,32 @@
                       <input 
                         type="text" 
                         required
-                        class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs"
                         placeholder="Masukkan Username atau Email"
                         value={loginForm.username}
                         onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
                       />
                     </div>
                     <div>
-                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Password</label>
-                      <input 
-                        type="password" 
-                        required
-                        class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                        placeholder="••••••••"
-                        value={loginForm.password}
-                        onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
-                      />
+                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Password (Min 3 Karakter)</label>
+                      <div class="relative">
+                        <input 
+                          type={showPassword ? "text" : "password"} 
+                          required
+                          minLength="3"
+                          class="w-full px-4 py-3 pr-10 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs"
+                          placeholder="••••••••"
+                          value={loginForm.password}
+                          onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                        />
+                        <button 
+                          type="button" 
+                          onClick={() => setShowPassword(!showPassword)}
+                          class="absolute right-3 top-3 text-stone-400 hover:text-stone-600 dark:hover:text-white"
+                        >
+                          <i class={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                        </button>
+                      </div>
                     </div>
                     
                     <button 
@@ -1356,11 +1388,12 @@
                     </div>
                   </div>
 
+                  {}
                   <div class="bg-white dark:bg-stone-900 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 overflow-hidden">
                     <div class="p-5 border-b border-stone-100 dark:border-stone-800 flex items-center justify-between">
                       <div class="flex items-center space-x-2">
                         <i class="fa-solid fa-list-check text-emerald-600"></i>
-                        <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100">Daftar Rencana Kerja Madrasah</h4>
+                        <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100">Rencana Kerja Madrasah</h4>
                       </div>
                       {currentUser.role === 'admin' && (
                         <button 
@@ -1568,7 +1601,7 @@
                             .map((surah) => (
                               <button 
                                 key={surah.number}
-                                onClick={() => viewSurahDetails(surah.number)}
+                                onClick={() => viewSurahDetails(surah.number, selectedQari)}
                                 class="p-3.5 rounded-2xl bg-stone-50/50 hover:bg-emerald-50/40 border border-stone-100 dark:bg-stone-800/25 dark:border-stone-800/40 text-left transition-all hover:scale-[1.01] flex items-center justify-between"
                               >
                                 <div class="flex items-center space-x-3">
@@ -1587,20 +1620,57 @@
                     </div>
                   ) : (
                     <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
-                      {}
-                      <div class="flex items-center justify-between pb-3 border-b border-stone-100 dark:border-stone-800 mb-4 flex-wrap gap-4">
-                        <button 
-                          onClick={() => { setSelectedSurah(null); setSurahDetails(null); setIsPlayingFullSurah(false); setIsPlayingRange(false); setStartAyah(''); setEndAyah(''); if (audioRef.current) audioRef.current.pause(); }}
-                          class="text-xs text-emerald-600 font-bold flex items-center hover:underline"
-                        >
-                          <i class="fa-solid fa-arrow-left mr-1"></i> Kembali ke Daftar
-                        </button>
+                      
+                      {/* Control Panel: Back button, Qari Dropdown, Play options */}
+                      <div class="flex flex-col space-y-4 pb-3 border-b border-stone-100 dark:border-stone-800 mb-4">
+                        <div class="flex items-center justify-between flex-wrap gap-2">
+                          <button 
+                            onClick={() => { 
+                              setSelectedSurah(null); 
+                              setSurahDetails(null); 
+                              setIsPlayingFullSurah(false); 
+                              setIsPlayingRange(false); 
+                              setStartAyah(''); 
+                              setEndAyah(''); 
+                              if (audioRef.current) audioRef.current.pause(); 
+                            }}
+                            class="text-xs text-emerald-600 font-bold flex items-center hover:underline"
+                          >
+                            <i class="fa-solid fa-arrow-left mr-1"></i> Kembali ke Daftar
+                          </button>
 
-                        <div class="flex items-center space-x-3 flex-wrap gap-2">
-                          {/* Range Playback controls */}
-                          <div class="flex items-center space-x-2 flex-wrap bg-stone-50 dark:bg-stone-800/50 p-2 rounded-2xl border border-stone-100 dark:border-stone-800">
-                            <div class="flex flex-col">
-                              <label class="text-[9px] font-bold text-stone-400 uppercase tracking-wider mb-0.5 px-1">Opsi Putar</label>
+                          {surahDetails && (
+                            <div class="text-right">
+                              <h4 class="font-bold text-xs text-slate-800 dark:text-stone-100">{surahDetails.info.englishName}</h4>
+                              <p class="text-[10px] text-stone-400 font-semibold">{surahDetails.info.numberOfAyahs} Ayat</p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Qari Selection Dropdown & Play Controls */}
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 bg-stone-50 dark:bg-stone-800/40 p-4 rounded-2xl border border-stone-100 dark:border-stone-800">
+                          
+                          {/* Qari Picker */}
+                          <div class="flex flex-col">
+                            <label class="text-[9px] font-bold text-stone-400 uppercase tracking-wider mb-1"><i class="fa-solid fa-microphone mr-1 text-emerald-600"></i> Pilihan Qari / Reciter</label>
+                            <select 
+                              value={selectedQari}
+                              onChange={(e) => {
+                                setSelectedQari(e.target.value);
+                                viewSurahDetails(selectedSurah, e.target.value);
+                              }}
+                              class="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs rounded-xl px-2.5 py-1.5 font-bold text-slate-800 dark:text-stone-200 focus:outline-none"
+                            >
+                              {qariList.map(q => (
+                                <option key={q.id} value={q.id}>{q.name}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Play Mode & Play Action */}
+                          <div class="flex flex-col space-y-1.5">
+                            <label class="text-[9px] font-bold text-stone-400 uppercase tracking-wider"><i class="fa-solid fa-play-circle mr-1 text-emerald-600"></i> Mode Pemutaran</label>
+                            <div class="flex items-center space-x-2">
                               <select 
                                 value={quranPlayMode}
                                 onChange={(e) => {
@@ -1612,62 +1682,51 @@
                                   setIsPlayingRange(false);
                                   setPlayingAudio(null);
                                 }}
-                                class="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs rounded-xl px-2.5 py-1.5 font-bold text-slate-800 dark:text-stone-200 focus:outline-none"
+                                class="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs rounded-xl px-2 py-1.5 font-bold text-slate-800 dark:text-stone-200 focus:outline-none flex-1"
                               >
-                                <option value="full">Putar Full Surat</option>
-                                <option value="range">Putar Ayat Tertentu</option>
+                                <option value="full">Putar Full Surat (Repeat)</option>
+                                <option value="range">Putar Ayat Tertentu (Repeat)</option>
                               </select>
-                            </div>
 
-                            {quranPlayMode === 'range' && (
-                              <div class="flex items-center space-x-1.5">
-                                <div class="flex flex-col">
-                                  <label class="text-[9px] font-bold text-stone-400 uppercase tracking-wider mb-0.5 px-1">Ayat Awal</label>
+                              {quranPlayMode === 'range' && (
+                                <div class="flex items-center space-x-1">
                                   <input 
                                     type="number"
                                     min="1"
                                     max={surahDetails?.info.numberOfAyahs}
                                     value={startAyah}
                                     onChange={(e) => setStartAyah(e.target.value)}
-                                    placeholder="1"
-                                    class="w-16 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs rounded-xl px-2 py-1.5 text-center font-bold text-slate-800 dark:text-stone-200 focus:ring-1 focus:ring-emerald-500 outline-none"
+                                    placeholder="Awal"
+                                    class="w-12 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs rounded-xl px-1.5 py-1 text-center font-bold text-slate-800 dark:text-stone-200 outline-none"
                                   />
-                                </div>
-                                <div class="flex flex-col">
-                                  <label class="text-[9px] font-bold text-stone-400 uppercase tracking-wider mb-0.5 px-1">Ayat Akhir</label>
+                                  <span class="text-xs text-stone-400">-</span>
                                   <input 
                                     type="number"
                                     min="1"
                                     max={surahDetails?.info.numberOfAyahs}
                                     value={endAyah}
                                     onChange={(e) => setEndAyah(e.target.value)}
-                                    placeholder={surahDetails?.info.numberOfAyahs}
-                                    class="w-16 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs rounded-xl px-2 py-1.5 text-center font-bold text-slate-800 dark:text-stone-200 focus:ring-1 focus:ring-emerald-500 outline-none"
+                                    placeholder="Akhir"
+                                    class="w-12 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs rounded-xl px-1.5 py-1 text-center font-bold text-slate-800 dark:text-stone-200 outline-none"
                                   />
                                 </div>
-                              </div>
-                            )}
+                              )}
 
-                            <button
-                              onClick={handleQuranPlayback}
-                              class={`text-xs px-4 py-2 rounded-xl font-bold transition-all shadow-sm flex items-center self-end ${
-                                (isPlayingFullSurah || isPlayingRange) 
-                                  ? 'bg-amber-500 text-white animate-pulse' 
-                                  : 'bg-emerald-700 text-white hover:bg-emerald-800'
-                              }`}
-                            >
-                              <i class={`fa-solid ${(isPlayingFullSurah || isPlayingRange) ? 'fa-pause' : 'fa-play'} mr-1.5 text-xs`}></i>
-                              {(isPlayingFullSurah || isPlayingRange) ? 'Pause' : 'Putar'}
-                            </button>
-                          </div>
-
-                          {surahDetails && (
-                            <div class="text-right">
-                              <h4 class="font-bold text-xs text-slate-800 dark:text-stone-100">{surahDetails.info.englishName}</h4>
-                              <p class="text-[10px] text-stone-400 font-semibold">{surahDetails.info.numberOfAyahs} Ayat</p>
+                              <button
+                                onClick={handleQuranPlayback}
+                                class={`text-xs px-3.5 py-1.5 rounded-xl font-bold transition-all shadow-sm flex items-center ${
+                                  (isPlayingFullSurah || isPlayingRange) 
+                                    ? 'bg-amber-500 text-white animate-pulse' 
+                                    : 'bg-emerald-700 text-white hover:bg-emerald-800'
+                                }`}
+                              >
+                                <i class={`fa-solid ${(isPlayingFullSurah || isPlayingRange) ? 'fa-pause' : 'fa-play'} mr-1`}></i>
+                                {(isPlayingFullSurah || isPlayingRange) ? 'Mute' : 'Mulai'}
+                              </button>
                             </div>
-                          )}
+                          </div>
                         </div>
+
                       </div>
 
                       {loadingQuran || !surahDetails ? (
@@ -1719,6 +1778,7 @@
                 </div>
               )}
 
+              {}
               {currentTab === 'makkah' && (
                 <div class="space-y-4">
                   <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 flex flex-col">
@@ -1726,7 +1786,7 @@
                       <i class="fa-brands fa-youtube text-red-600 mr-2"></i> Live Makkah Al-Mukarramah
                     </h4>
                     <div class="relative w-full pb-[56.25%] h-0 rounded-2xl overflow-hidden shadow-inner bg-black">
-                      <iframe src="https://www.youtube.com/embed/grO45DMs2GI?autoplay=1&mute=1" class="absolute top-0 left-0 w-full h-full border-none" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                      <iframe src="https://www.youtube.com/embed/4H9ywg5G-HI?autoplay=1&mute=1" class="absolute top-0 left-0 w-full h-full border-none" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
                     </div>
                   </div>
                 </div>
@@ -1756,7 +1816,11 @@
                       </div>
                       {currentUser.role === 'admin' && (
                         <button 
-                          onClick={() => setIsInfoModalOpen(true)}
+                          onClick={() => {
+                            setInfoForm({ id: '', title: '', content: '' });
+                            setIsEditingInfo(false);
+                            setIsInfoModalOpen(true);
+                          }}
                           class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-xl font-bold transition-all shadow-sm"
                         >
                           <i class="fa-solid fa-plus mr-1"></i> Buat Informasi
@@ -1774,20 +1838,29 @@
                               <h5 class="font-bold text-xs text-stone-800 dark:text-stone-100 uppercase tracking-wide">{info.title}</h5>
                               <p class="text-xs text-stone-600 dark:text-stone-400 leading-relaxed whitespace-pre-wrap">{info.content}</p>
                               <div class="flex items-center space-x-2 pt-2 text-[10px] text-stone-400 font-medium">
-                                <span><i class="fa-solid fa-clock mr-1"></i> {info.timestamp}</span>
+                                <span><i class="fa-solid fa-clock mr-1"></i> {formatTimestamp(info.timestamp)}</span>
                                 <span>•</span>
                                 <span><i class="fa-solid fa-user mr-1"></i> Oleh: {info.createdBy}</span>
                               </div>
                             </div>
 
                             {currentUser.role === 'admin' && (
-                              <button
-                                onClick={() => handleDeleteInfo(info.id)}
-                                class="text-rose-600 hover:text-rose-800 p-1 rounded-lg"
-                                title="Hapus Pengumuman"
-                              >
-                                <i class="fa-solid fa-trash"></i>
-                              </button>
+                              <div class="flex items-center space-x-2">
+                                <button
+                                  onClick={() => handleEditInfo(info)}
+                                  class="text-xs text-blue-600 hover:text-blue-800 font-bold flex items-center bg-blue-50 dark:bg-blue-950/40 px-2 py-1 rounded-lg"
+                                  title="Revisi Informasi"
+                                >
+                                  <i class="fa-solid fa-edit mr-1"></i> Revisi
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteInfo(info.id)}
+                                  class="text-rose-600 hover:text-rose-800 p-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                                  title="Hapus Pengumuman"
+                                >
+                                  <i class="fa-solid fa-trash"></i>
+                                </button>
+                              </div>
                             )}
                           </div>
                         ))
@@ -1797,7 +1870,6 @@
                 </div>
               )}
 
-              {}
               {currentTab === 'settings' && (
                 <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
                   <h4 class="font-bold text-sm text-islamic-dark dark:text-stone-100 flex items-center mb-4">
@@ -1824,7 +1896,7 @@
                     <div class="flex space-x-2">
                       <button 
                         type="submit" 
-                        class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs py-3 rounded-xl font-bold transition-all animate-pulse"
+                        class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs py-3 rounded-xl font-bold transition-all"
                       >
                         <i class="fa-solid fa-cloud-arrow-up mr-1"></i> Simpan URL & Update
                       </button>
@@ -1885,23 +1957,21 @@
                     />
                   </div>
 
-                  {/* Penanggung Jawab (PIC) - Dropdown Select of Users with role 'admin' */}
                   <div>
                     <label class="block text-[10px] font-bold uppercase text-stone-400 mb-1">Penanggung Jawab (PIC)</label>
                     <select 
                       required
-                      class="w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-800 dark:text-stone-200"
+                      class="w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-850 dark:text-white"
                       value={activityForm.pic}
                       onChange={(e) => setActivityForm({ ...activityForm, pic: e.target.value })}
                     >
-                      <option value="">-- Pilih PIC (Admin) --</option>
+                      <option value="">-- Pilih PIC Admin --</option>
                       {users
                         .filter(u => u.role === 'admin')
                         .map(u => (
                           <option key={u.username} value={u.username}>{u.username}</option>
                         ))
                       }
-                      {/* Fallback option jika PIC bernilai string di luar list admin */}
                       {activityForm.pic && !users.some(u => u.username === activityForm.pic && u.role === 'admin') && (
                         <option value={activityForm.pic}>{activityForm.pic}</option>
                       )}
@@ -1950,7 +2020,7 @@
                     type="submit" 
                     class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-islamic-mint text-white font-bold transition-all shadow-lg"
                   >
-                    <i class="fa-solid fa-save mr-1"></i> Simpan rencana Kerja
+                    <i class="fa-solid fa-save mr-1"></i> Simpan Agenda Kerja
                   </button>
                 </form>
               </div>
@@ -1962,14 +2032,14 @@
             <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
               <div class="w-full max-w-md bg-white dark:bg-stone-900 rounded-3xl shadow-2xl border border-stone-100 dark:border-stone-800 overflow-hidden p-6 relative">
                 <button 
-                  onClick={() => { setIsInfoModalOpen(false); setInfoForm({ title: '', content: '' }); }}
+                  onClick={() => { setIsInfoModalOpen(false); setInfoForm({ id: '', title: '', content: '' }); setIsEditingInfo(false); }}
                   class="absolute top-4 right-4 text-stone-400 hover:text-stone-600"
                 >
                   <i class="fa-solid fa-circle-xmark text-xl"></i>
                 </button>
 
                 <h3 class="text-base font-bold text-islamic-dark dark:text-stone-100 mb-4 flex items-center">
-                  <i class="fa-solid fa-bullhorn text-emerald-600 mr-2"></i> Tambah Informasi Baru
+                  <i class="fa-solid fa-bullhorn text-emerald-600 mr-2"></i> {isEditingInfo ? 'Revisi Pengumuman' : 'Tambah Informasi Baru'}
                 </h3>
 
                 <form onSubmit={handleSaveInfo} class="space-y-4 text-xs text-left">
@@ -2009,7 +2079,7 @@
                     type="submit" 
                     class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-islamic-mint text-white font-bold transition-all shadow-lg"
                   >
-                    <i class="fa-solid fa-paper-plane mr-1"></i> Publikasikan Informasi
+                    <i class="fa-solid fa-paper-plane mr-1"></i> {isEditingInfo ? 'Simpan Revisi Informasi' : 'Publikasikan Informasi'}
                   </button>
                 </form>
               </div>
