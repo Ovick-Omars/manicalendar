@@ -94,7 +94,8 @@
     const { useState, useEffect, useRef } = React;
 
     function App() {
-          const defaultGasUrl = 'https://script.google.com/macros/s/AKfycbzkKBd6xsipuMmaNsj7J5h3yjXUuRg1yPbwt9UCx3U_YBCCulV-Xkw6GbslENeZ-3miaQ/exec';
+      
+      const defaultGasUrl = 'https://script.google.com/macros/s/AKfycbzkKBd6xsipuMmaNsj7J5h3yjXUuRg1yPbwt9UCx3U_YBCCulV-Xkw6GbslENeZ-3miaQ/exec';
       const [apiConnected, setApiConnected] = useState(false);
       const [apiUrl, setApiUrl] = useState(() => localStorage.getItem('gas_api_url') || defaultGasUrl);
       const [currentUser, setCurrentUser] = useState(() => {
