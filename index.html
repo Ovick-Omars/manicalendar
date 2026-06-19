@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>manicalendar - Manajemen Aktifitas Madrasah</title>
 
-  <!-- ✅ FIX #1: Tailwind via CDN Play (aman untuk GitHub Pages) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -13,17 +12,9 @@
       theme: {
         extend: {
           colors: {
-            islamic: {
-              gold: '#D4AF37',
-              dark: '#0B2B26',
-              mint: '#235E52',
-              light: '#F4F7F6',
-              accent: '#E5A93B'
-            }
+            islamic: { gold:'#D4AF37', dark:'#0B2B26', mint:'#235E52', light:'#F4F7F6', accent:'#E5A93B' }
           },
-          fontFamily: {
-            sans: ['Plus Jakarta Sans', 'Inter', 'sans-serif'],
-          }
+          fontFamily: { sans: ['Plus Jakarta Sans','Inter','sans-serif'] }
         }
       }
     }
@@ -32,905 +23,1046 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-  <!-- ✅ FIX #2: React via ESM dari esm.sh — TIDAK butuh Babel, TIDAK kena blokir CSP -->
-  <script type="importmap">
-  {
-    "imports": {
-      "react": "https://esm.sh/react@18",
-      "react-dom/client": "https://esm.sh/react-dom@18/client",
-      "htm/react": "https://esm.sh/htm@3/react"
-    }
-  }
-  </script>
+  <!-- React 18 UMD — tidak butuh Babel, tidak kena CSP -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
 
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#0B2B26">
 
   <style>
-    body { font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
-    .arabic-text { font-family: 'Amiri', serif; }
-    .no-scrollbar::-webkit-scrollbar { display: none; }
-    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-    .glass-card { background: rgba(255,255,255,0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.4); }
-    .dark .glass-card { background: rgba(11,43,38,0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.05); }
-    .sholat-card { background: linear-gradient(135deg, #0B2B26 0%, #1c4d44 100%); }
-    /* Loading screen */
-    #app-loading { position:fixed; inset:0; background:#0B2B26; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:9999; }
-    #app-loading .loader { width:48px; height:48px; border:4px solid rgba(212,175,55,0.3); border-top-color:#D4AF37; border-radius:50%; animation:spin 0.8s linear infinite; margin-bottom:16px; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    #root.ready #app-loading { display:none; }
+    body{font-family:'Plus Jakarta Sans',sans-serif;-webkit-tap-highlight-color:transparent}
+    .arabic-text{font-family:'Amiri',serif}
+    .no-scrollbar::-webkit-scrollbar{display:none}
+    .no-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
+    .glass-card{background:rgba(255,255,255,.85);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.4)}
+    .dark .glass-card{background:rgba(11,43,38,.85);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.05)}
+    .sholat-card{background:linear-gradient(135deg,#0B2B26 0%,#1c4d44 100%)}
+    #app-loading{position:fixed;inset:0;background:#0B2B26;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;transition:opacity .4s}
+    .loader{width:48px;height:48px;border:4px solid rgba(212,175,55,.3);border-top-color:#D4AF37;border-radius:50%;animation:spin .8s linear infinite;margin-bottom:16px}
+    @keyframes spin{to{transform:rotate(360deg)}}
   </style>
 </head>
 <body class="bg-[#F4F7F6] text-slate-800 dark:bg-stone-950 dark:text-stone-100 min-h-screen flex flex-col transition-colors duration-300 pb-20">
 
-  <!-- Loading screen saat module JS dimuat -->
   <div id="app-loading">
     <div class="loader"></div>
-    <p style="color:#D4AF37;font-size:13px;font-weight:700;letter-spacing:2px;">MEMUAT APLIKASI...</p>
+    <p style="color:#D4AF37;font-size:13px;font-weight:700;letter-spacing:2px">MEMUAT APLIKASI...</p>
   </div>
 
   <div id="root" class="flex-grow flex flex-col"></div>
 
-  <!-- ✅ FIX #3: Gunakan type="module" — tidak perlu Babel, berjalan native di semua browser modern -->
-  <script type="module">
-    import { useState, useEffect, useRef, useCallback } from 'react';
-    import { createRoot } from 'react-dom/client';
-    // htm = JSX-like template literals, tidak perlu Babel build step
-    import { html } from 'htm/react';
+<script>
+// ─────────────────────────────────────────────────────────────────
+// SEMBUNYIKAN LOADING SCREEN SAAT DOKUMEN SIAP
+// ─────────────────────────────────────────────────────────────────
+function hideLoading() {
+  var el = document.getElementById('app-loading');
+  if (el) { el.style.opacity = '0'; setTimeout(function(){ el.style.display='none'; }, 400); }
+}
 
-    // Sembunyikan loading screen
-    document.getElementById('app-loading').style.display = 'none';
+// ─────────────────────────────────────────────────────────────────
+// KONSTANTA & UTILITAS
+// ─────────────────────────────────────────────────────────────────
+var FALLBACK_TODOS = [
+  {id:'1',task:'Ujian Tengah Semester Ganjil',subActivity:'Persiapan lembar soal & pengawas madrasah',pic:'admin',startDate:'2026-06-01',endDate:'2026-06-05',progress:50,createdBy:'admin',keterangan:'Soal sedang dicetak.'},
+  {id:'2',task:'Rapat Kerja Tahunan Madrasah',subActivity:'Penyusunan anggaran belanja sekolah',pic:'rafliano',startDate:'2026-06-10',endDate:'2026-06-12',progress:100,createdBy:'admin',keterangan:'Rapat berjalan lancar.'},
+  {id:'3',task:'Penerimaan Santri Baru (PSB)',subActivity:'Seleksi berkas & wawancara online',pic:'rafliano',startDate:'2026-06-15',endDate:'2026-06-20',progress:20,createdBy:'admin',keterangan:''}
+];
+var FALLBACK_INFOS = [
+  {id:'1',title:'Persiapan Ujian Semester',content:'Diharapkan seluruh asatidzah mempersiapkan naskah soal ujian paling lambat akhir minggu ini.',timestamp:'2026-06-01T09:15:00.000Z',createdBy:'rafliano'},
+  {id:'2',title:'Kebersihan Lingkungan Madrasah',content:'Kerja bakti rutin hari Jumat akan difokuskan pada area halaman depan dan ruang kelas baru.',timestamp:'2026-06-01T10:30:00.000Z',createdBy:'admin'}
+];
+var QARI_LIST = [
+  {name:'Misyari Al-Afasy',id:'ar.alafasy'},
+  {name:'Abdurrahman As-Sudais',id:'ar.abdurrahmaansudais'},
+  {name:'Maher Al-Muaiqly',id:'ar.mahermuaiqly'},
+  {name:'Ali Al-Hudhaify',id:'ar.hudhaify'},
+  {name:'Mahmoud Khalil Al-Husary',id:'ar.husary'},
+  {name:'Saad Al-Ghamdi',id:'ar.saadalgamdi'},
+  {name:'Abdul Basit Abdul Samad',id:'ar.abdulbasitmurattal'},
+  {name:'Mohamed Siddiq El-Minshawi',id:'ar.minshawi'}
+];
+var SHOLAT = [
+  {name:'Subuh',time:'04:36',icon:'fa-cloud-sun'},
+  {name:'Dzuhur',time:'11:53',icon:'fa-sun'},
+  {name:'Ashar',time:'15:14',icon:'fa-cloud'},
+  {name:'Maghrib',time:'17:48',icon:'fa-moon'},
+  {name:'Isya',time:'19:01',icon:'fa-star-and-crescent'}
+];
 
-    // ─── KONSTANTA ───────────────────────────────────────────────
-    const DEFAULT_GAS_URL = ''; // ✅ FIX #4: Dikosongkan — user wajib isi URL GAS-nya sendiri via Settings
+// LocalStorage helpers
+var ls = {
+  get: function(k,fb){ try{ var v=localStorage.getItem(k); return v?JSON.parse(v):fb; }catch(e){ return fb; } },
+  set: function(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} },
+  str: function(k,fb){ return localStorage.getItem(k)||fb||''; },
+  setStr: function(k,v){ localStorage.setItem(k,v); },
+  remove: function(k){ localStorage.removeItem(k); }
+};
 
-    const FALLBACK_TODOS = [
-      { id: '1', task: 'Ujian Tengah Semester Ganjil', subActivity: 'Persiapan lembar soal & pengawas madrasah', pic: 'admin', startDate: '2026-06-01', endDate: '2026-06-05', progress: 50, createdBy: 'admin', keterangan: 'Soal sedang dicetak.' },
-      { id: '2', task: 'Rapat Kerja Tahunan Madrasah', subActivity: 'Penyusunan anggaran belanja sekolah', pic: 'rafliano', startDate: '2026-06-10', endDate: '2026-06-12', progress: 100, createdBy: 'admin', keterangan: 'Rapat berjalan lancar.' },
-      { id: '3', task: 'Penerimaan Santri Baru (PSB)', subActivity: 'Seleksi berkas & wawancara online', pic: 'rafliano', startDate: '2026-06-15', endDate: '2026-06-20', progress: 20, createdBy: 'admin', keterangan: '' }
-    ];
-    const FALLBACK_INFOS = [
-      { id: '1', title: 'Persiapan Ujian Semester', content: 'Diharapkan seluruh asatidzah mempersiapkan naskah soal ujian paling lambat akhir minggu ini.', timestamp: '2026-06-01T09:15:00.000Z', createdBy: 'rafliano' },
-      { id: '2', title: 'Kebersihan Lingkungan Madrasah', content: 'Kerja bakti rutin hari Jumat akan difokuskan pada area halaman depan dan ruang kelas baru.', timestamp: '2026-06-01T10:30:00.000Z', createdBy: 'admin' }
-    ];
-    const QARI_LIST = [
-      { name: 'Misyari Al-Afasy', id: 'ar.alafasy' },
-      { name: 'Abdurrahman As-Sudais', id: 'ar.abdurrahmaansudais' },
-      { name: 'Maher Al-Muaiqly', id: 'ar.mahermuaiqly' },
-      { name: 'Ali Al-Hudhaify', id: 'ar.hudhaify' },
-      { name: 'Mahmoud Khalil Al-Husary', id: 'ar.husary' },
-      { name: 'Saad Al-Ghamdi', id: 'ar.saadalgamdi' },
-      { name: 'Abdul Basit Abdul Samad', id: 'ar.abdulbasitmurattal' },
-      { name: 'Mohamed Siddiq El-Minshawi', id: 'ar.minshawi' }
-    ];
-    const SHOLAT_TIMES = [
-      { name: 'Subuh', time: '04:36', icon: 'fa-cloud-sun' },
-      { name: 'Dzuhur', time: '11:53', icon: 'fa-sun' },
-      { name: 'Ashar', time: '15:14', icon: 'fa-cloud' },
-      { name: 'Maghrib', time: '17:48', icon: 'fa-moon' },
-      { name: 'Isya', time: '19:01', icon: 'fa-star-and-crescent' }
-    ];
+function parseLocalDate(s){
+  if(!s) return null;
+  try{
+    s=s.toString().trim();
+    var p=s.includes('T')?s.split('T')[0]:s;
+    var pts=p.split(/[-/]/);
+    if(pts.length===3){
+      if(pts[0].length===4) return new Date(+pts[0],+pts[1]-1,+pts[2]);
+      if(pts[2].length===4) return new Date(+pts[2],+pts[1]-1,+pts[0]);
+    }
+    var d=new Date(s); if(!isNaN(d)) return d;
+  }catch(e){}
+  return null;
+}
+function formatDateStr(s){
+  var d=parseLocalDate(s); if(!d) return s||'';
+  return String(d.getDate()).padStart(2,'0')+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+d.getFullYear();
+}
+function toInputDate(s){
+  var d=parseLocalDate(s); if(!d) return s||'';
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function formatTimestamp(ts){
+  if(!ts) return '';
+  var d=new Date(ts.toString().trim()); if(isNaN(d)) return ts;
+  return String(d.getDate()).padStart(2,'0')+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+d.getFullYear()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+}
+function todayStr(){ return new Date().toISOString().split('T')[0]; }
+function getHijri(){
+  return new Intl.DateTimeFormat('id-ID-u-ca-islamic-umalqura',{calendar:'islamic-umalqura',day:'numeric',month:'long',year:'numeric'}).format(new Date());
+}
 
-    // ─── UTILITY FUNCTIONS ────────────────────────────────────────
-    const parseLocalDate = (dateStr) => {
-      if (!dateStr) return null;
-      try {
-        const s = dateStr.toString().trim();
-        if (s.includes('T')) {
-          const [y, m, d] = s.split('T')[0].split('-').map(Number);
-          return new Date(y, m - 1, d);
+// ─────────────────────────────────────────────────────────────────
+// KOMPONEN REACT — menggunakan React.createElement langsung (TANPA BABEL, TANPA JSX)
+// Shorthand: e() = React.createElement()
+// ─────────────────────────────────────────────────────────────────
+var e = React.createElement;
+var useState    = React.useState;
+var useEffect   = React.useEffect;
+var useRef      = React.useRef;
+var useCallback = React.useCallback;
+
+// ── Komponen kecil ──
+function Icon(props){ return e('i',{className:'fa-solid '+props.cls+(props.extra?' '+props.extra:'')}); }
+
+function Toast(props){
+  if(!props.show) return null;
+  var colors = props.type==='success'?'bg-emerald-600 border-emerald-500':props.type==='error'?'bg-rose-600 border-rose-500':'bg-amber-500 border-amber-400';
+  var icon   = props.type==='success'?'fa-circle-check':props.type==='error'?'fa-triangle-exclamation':'fa-circle-exclamation';
+  return e('div',{className:'fixed top-20 right-4 z-50 animate-bounce'},
+    e('div',{className:'px-4 py-3 rounded-2xl shadow-2xl flex items-center space-x-3 text-white border '+colors},
+      e('i',{className:'fa-solid '+icon}),
+      e('span',{className:'text-xs font-bold'},props.message)
+    )
+  );
+}
+
+function ConfirmModal(props){
+  if(!props.isOpen) return null;
+  return e('div',{className:'fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm'},
+    e('div',{className:'w-full max-w-sm bg-white dark:bg-stone-900 rounded-3xl p-6 border border-stone-100 dark:border-stone-800 shadow-2xl text-center'},
+      e('div',{className:'w-12 h-12 rounded-full bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto mb-3'},
+        e('i',{className:'fa-solid fa-circle-question text-xl'})
+      ),
+      e('h3',{className:'text-sm font-bold text-slate-800 dark:text-stone-100 mb-2'},'Konfirmasi Tindakan'),
+      e('p',{className:'text-xs text-stone-500 dark:text-stone-400 mb-6'},props.message),
+      e('div',{className:'flex space-x-2'},
+        e('button',{onClick:props.onCancel,className:'flex-1 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 text-xs font-bold text-stone-500'},'Batal'),
+        e('button',{onClick:props.onConfirm,className:'flex-1 py-2.5 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 shadow-md'},'Ya, Jalankan')
+      )
+    )
+  );
+}
+
+// ── KOMPONEN UTAMA APP ──
+function App(){
+  var [apiUrl,setApiUrl]             = useState(function(){ return ls.str('gas_api_url',''); });
+  var [apiConnected,setApiConnected] = useState(false);
+  var [currentUser,setCurrentUser]   = useState(function(){ return ls.get('active_user',null); });
+  var [currentTab,setCurrentTab]     = useState('home');
+  var [theme,setTheme]               = useState(function(){ return ls.str('theme','light'); });
+  var [users,setUsers]               = useState([]);
+  var [todos,setTodos]               = useState([]);
+  var [infos,setInfos]               = useState([]);
+  var [syncing,setSyncing]           = useState(false);
+  var [page,setPage]                 = useState(1);
+  var rowsPerPage = 10;
+  var [toast,setToast]               = useState({show:false,message:'',type:'success'});
+  var [confirm,setConfirm]           = useState({isOpen:false,message:'',action:null});
+  var [urlModal,setUrlModal]         = useState(false);
+  var [urlInput,setUrlInput]         = useState('');
+  var [showPw,setShowPw]             = useState(false);
+  var [showRegPw,setShowRegPw]       = useState(false);
+  var [regMode,setRegMode]           = useState(false);
+  var [regForm,setRegForm]           = useState({username:'',email:'',password:''});
+  var [loginForm,setLoginForm]       = useState({username:'',password:''});
+  var [authErr,setAuthErr]           = useState('');
+  var [authOk,setAuthOk]             = useState('');
+  var [modalOpen,setModalOpen]       = useState(false);
+  var [actForm,setActForm]           = useState({id:'',task:'',subActivity:'',pic:'',startDate:'',endDate:'',progress:0,keterangan:'',createdBy:''});
+  var [isEditing,setIsEditing]       = useState(false);
+  var [infoModal,setInfoModal]       = useState(false);
+  var [editingInfo,setEditingInfo]   = useState(false);
+  var [infoForm,setInfoForm]         = useState({id:'',title:'',content:''});
+  var [ketModal,setKetModal]         = useState({isOpen:false,todo:null,text:''});
+  var [surahs,setSurahs]             = useState([]);
+  var [selSurah,setSelSurah]         = useState(null);
+  var [surahDet,setSurahDet]         = useState(null);
+  var [loadQ,setLoadQ]               = useState(false);
+  var [playAud,setPlayAud]           = useState(null);
+  var [qSearch,setQSearch]           = useState('');
+  var [playFull,setPlayFull]         = useState(false);
+  var [playIdx,setPlayIdx]           = useState(0);
+  var [playMode,setPlayMode]         = useState('full');
+  var [startAyah,setStartAyah]       = useState('');
+  var [endAyah,setEndAyah]           = useState('');
+  var [playRange,setPlayRange]       = useState(false);
+  var [qari,setQari]                 = useState('ar.alafasy');
+  var playFullRef  = useRef(false);
+  var playRangeRef = useRef(false);
+  var audRef       = useRef(null);
+
+  // Theme effect
+  useEffect(function(){
+    document.documentElement.classList.toggle('dark', theme==='dark');
+    ls.setStr('theme',theme);
+  },[theme]);
+
+  // Boot
+  useEffect(function(){
+    syncCloud(apiUrl);
+    loadSurahs();
+  },[]);
+
+  function showToast(msg,type){
+    setToast({show:true,message:msg,type:type||'success'});
+    setTimeout(function(){ setToast(function(p){ return Object.assign({},p,{show:false}); }); },4000);
+  }
+
+  function askConfirm(msg,fn){
+    setConfirm({isOpen:true,message:msg,action:fn});
+  }
+
+  // ── CLOUD SYNC ──
+  function syncCloud(url){
+    var u = url !== undefined ? url : apiUrl;
+    if(!u){
+      setTodos(ls.get('local_todos',FALLBACK_TODOS));
+      setInfos(ls.get('local_infos',FALLBACK_INFOS));
+      var lu=ls.get('local_users',null); if(lu) setUsers(lu);
+      setApiConnected(false);
+      return;
+    }
+    setSyncing(true);
+    var ctrl = new AbortController();
+    var tid  = setTimeout(function(){ ctrl.abort(); },10000);
+    Promise.all([
+      fetch(u+'?action=getTodos',{signal:ctrl.signal}).then(function(r){ return r.json(); }),
+      fetch(u+'?action=getInfos',{signal:ctrl.signal}).then(function(r){ return r.json(); }),
+      fetch(u+'?action=getUsers',{signal:ctrl.signal}).then(function(r){ return r.json(); })
+    ]).then(function(results){
+      clearTimeout(tid);
+      var td=results[0], id=results[1], ud=results[2];
+      if(td.status==='success'){ setTodos(td.data); ls.set('local_todos',td.data); setApiConnected(true); }
+      if(id.status==='success'){ setInfos(id.data); ls.set('local_infos',id.data); }
+      if(ud.status==='success'){ setUsers(ud.data); ls.set('local_users',ud.data); }
+    }).catch(function(err){
+      clearTimeout(tid);
+      setTodos(ls.get('local_todos',FALLBACK_TODOS));
+      setInfos(ls.get('local_infos',FALLBACK_INFOS));
+      var lu=ls.get('local_users',null); if(lu) setUsers(lu);
+      setApiConnected(false);
+    }).finally(function(){ setSyncing(false); });
+  }
+
+  // ── QURAN ──
+  function loadSurahs(){
+    setLoadQ(true);
+    fetch('https://api.alquran.cloud/v1/surah')
+      .then(function(r){ return r.json(); })
+      .then(function(d){ if(d.code===200) setSurahs(d.data); })
+      .catch(function(){ showToast('Gagal memuat daftar Al-Quran','error'); })
+      .finally(function(){ setLoadQ(false); });
+  }
+
+  function viewSurah(num,q){
+    var qId = q||qari;
+    setLoadQ(true);
+    playFullRef.current=false; playRangeRef.current=false;
+    setPlayFull(false); setPlayRange(false); setStartAyah(''); setEndAyah('');
+    fetch('https://api.alquran.cloud/v1/surah/'+num+'/editions/quran-uthmani,id.indonesian,'+qId)
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if(d.code===200){
+          setSurahDet({
+            info:d.data[0],
+            verses:d.data[0].ayahs.map(function(a,i){
+              return {number:a.numberInSurah,text:a.text,translation:d.data[1].ayahs[i].text,audio:d.data[2].ayahs[i].audio};
+            })
+          });
+          setSelSurah(num);
         }
-        const parts = s.split(/[-/]/);
-        if (parts.length === 3) {
-          if (parts[0].length === 4) return new Date(+parts[0], +parts[1]-1, +parts[2]);
-          if (parts[2].length === 4) return new Date(+parts[2], +parts[1]-1, +parts[0]);
-        }
-        const d = new Date(s);
-        if (!isNaN(d.getTime())) return d;
-      } catch(e) {}
-      return null;
-    };
-    const formatDateStr = (dateStr) => {
-      if (!dateStr) return '';
-      const d = parseLocalDate(dateStr);
-      if (!d) return dateStr;
-      return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;
-    };
-    const formatToInputDate = (dateStr) => {
-      if (!dateStr) return '';
-      const d = parseLocalDate(dateStr);
-      if (!d) return dateStr;
-      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    };
-    const formatTimestamp = (ts) => {
-      if (!ts) return '';
-      const d = new Date(ts.toString().trim());
-      if (isNaN(d.getTime())) return ts;
-      return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-    };
-    const getHijriDate = () => {
-      return new Intl.DateTimeFormat('id-ID-u-ca-islamic-umalqura', { calendar:'islamic-umalqura', day:'numeric', month:'long', year:'numeric' }).format(new Date());
-    };
-    const todayInputDate = () => new Date().toISOString().split('T')[0];
-    const ls = {
-      get: (k, fallback=null) => { try { const v=localStorage.getItem(k); return v ? JSON.parse(v) : fallback; } catch(e){ return fallback; }},
-      set: (k,v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} },
-      str: (k,fallback='') => localStorage.getItem(k) || fallback,
-      setStr: (k,v) => localStorage.setItem(k,v),
-      remove: (k) => localStorage.removeItem(k)
-    };
+      })
+      .catch(function(){ showToast('Gagal memuat ayat.','error'); })
+      .finally(function(){ setLoadQ(false); });
+  }
 
-    // ─── KOMPONEN UTAMA APP ────────────────────────────────────────
-    function App() {
-      const [apiUrl, setApiUrl]           = useState(() => ls.str('gas_api_url', DEFAULT_GAS_URL));
-      const [apiConnected, setApiConnected] = useState(false);
-      const [currentUser, setCurrentUser]   = useState(() => ls.get('active_user', null));
-      const [currentTab, setCurrentTab]     = useState('home');
-      const [theme, setTheme]               = useState(() => ls.str('theme', 'light'));
-      const [users, setUsers]               = useState([]);
-      const [todos, setTodos]               = useState([]);
-      const [infos, setInfos]               = useState([]);
-      const [syncing, setSyncing]           = useState(false);
-      const [currentPage, setCurrentPage]   = useState(1);
-      const rowsPerPage = 10;
-      const [toast, setToast]               = useState({ show:false, message:'', type:'success' });
-      const [confirmModal, setConfirmModal] = useState({ isOpen:false, message:'', action:null });
-      const [isUrlModalOpen, setIsUrlModalOpen] = useState(false);
-      const [customUrlInput, setCustomUrlInput] = useState('');
-      const [showPassword, setShowPassword]   = useState(false);
-      const [showRegPassword, setShowRegPassword] = useState(false);
-      const [isRegisterMode, setIsRegisterMode] = useState(false);
-      const [regForm, setRegForm]             = useState({ username:'', email:'', password:'' });
-      const [loginForm, setLoginForm]         = useState({ username:'', password:'' });
-      const [authError, setAuthError]         = useState('');
-      const [authSuccess, setAuthSuccess]     = useState('');
-      const [isModalOpen, setIsModalOpen]     = useState(false);
-      const [activityForm, setActivityForm]   = useState({ id:'', task:'', subActivity:'', pic:'', startDate:'', endDate:'', progress:0, keterangan:'', createdBy:'' });
-      const [isEditing, setIsEditing]         = useState(false);
-      const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
-      const [isEditingInfo, setIsEditingInfo]   = useState(false);
-      const [infoForm, setInfoForm]             = useState({ id:'', title:'', content:'' });
-      const [keteranganModal, setKeteranganModal] = useState({ isOpen:false, todo:null, text:'' });
-      const [quranSurahs, setQuranSurahs]       = useState([]);
-      const [selectedSurah, setSelectedSurah]   = useState(null);
-      const [surahDetails, setSurahDetails]     = useState(null);
-      const [loadingQuran, setLoadingQuran]     = useState(false);
-      const [playingAudio, setPlayingAudio]     = useState(null);
-      const [quranSearch, setQuranSearch]       = useState('');
-      const [isPlayingFullSurah, setIsPlayingFullSurah] = useState(false);
-      const [currentFullSurahIndex, setCurrentFullSurahIndex] = useState(0);
-      const [quranPlayMode, setQuranPlayMode]   = useState('full');
-      const [startAyah, setStartAyah]           = useState('');
-      const [endAyah, setEndAyah]               = useState('');
-      const [isPlayingRange, setIsPlayingRange] = useState(false);
-      const [selectedQari, setSelectedQari]     = useState('ar.alafasy');
-      const isPlayingFullSurahRef = useRef(false);
-      const isPlayingRangeRef     = useRef(false);
-      const audioRef              = useRef(null);
+  function playAudio(url,id){
+    playFullRef.current=false; playRangeRef.current=false;
+    setPlayFull(false); setPlayRange(false);
+    if(audRef.current) audRef.current.pause();
+    if(playAud && playAud.id===id){ setPlayAud(null); return; }
+    audRef.current=new Audio(url);
+    audRef.current.play().catch(function(){});
+    setPlayAud({url:url,id:id});
+    audRef.current.onended=function(){ setPlayAud(null); };
+  }
 
-      // ── Theme ──
-      useEffect(() => {
-        document.documentElement.classList.toggle('dark', theme === 'dark');
-        ls.setStr('theme', theme);
-      }, [theme]);
+  function playVerseAt(idx){
+    if(!playFullRef.current) return;
+    if(idx>=surahDet.verses.length){ playVerseAt(0); return; }
+    var v=surahDet.verses[idx];
+    setPlayIdx(idx);
+    if(audRef.current) audRef.current.pause();
+    audRef.current=new Audio(v.audio);
+    audRef.current.play().catch(function(){});
+    setPlayAud({url:v.audio,id:v.number});
+    audRef.current.onended=function(){ playVerseAt(idx+1); };
+  }
 
-      // ── Toast ──
-      const showToast = useCallback((message, type='success') => {
-        setToast({ show:true, message, type });
-        setTimeout(() => setToast(p => ({ ...p, show:false })), 4000);
-      }, []);
+  function playRangeAt(cur,end){
+    if(!playRangeRef.current) return;
+    var sv=parseInt(startAyah,10)||1;
+    if(cur>end||cur>=surahDet.verses.length){ playRangeAt(sv-1,end); return; }
+    var v=surahDet.verses[cur];
+    setPlayIdx(cur);
+    if(audRef.current) audRef.current.pause();
+    audRef.current=new Audio(v.audio);
+    audRef.current.play().catch(function(){});
+    setPlayAud({url:v.audio,id:v.number});
+    audRef.current.onended=function(){ playRangeAt(cur+1,end); };
+  }
 
-      const askConfirmation = (message, action) =>
-        setConfirmModal({ isOpen:true, message, action: () => { action(); setConfirmModal({ isOpen:false, message:'', action:null }); }});
+  function handleQuranPlayback(){
+    if(!surahDet) return;
+    if(playMode==='full'){
+      if(playFullRef.current){
+        if(audRef.current) audRef.current.pause();
+        playFullRef.current=false; setPlayFull(false); setPlayAud(null);
+      } else {
+        playFullRef.current=true; playRangeRef.current=false;
+        setPlayFull(true); setPlayRange(false);
+        playVerseAt(0);
+      }
+    } else {
+      if(playRangeRef.current){
+        if(audRef.current) audRef.current.pause();
+        playRangeRef.current=false; setPlayRange(false); setPlayAud(null);
+      } else {
+        var sv=parseInt(startAyah,10);
+        var ev=parseInt(endAyah,10)||surahDet.info.numberOfAyahs;
+        if(isNaN(sv)||sv<1||sv>surahDet.info.numberOfAyahs){ showToast('Nomor ayat awal tidak valid!','error'); return; }
+        if(isNaN(ev)||ev<sv||ev>surahDet.info.numberOfAyahs){ showToast('Nomor ayat akhir tidak valid!','error'); return; }
+        playRangeRef.current=true; playFullRef.current=false;
+        setPlayRange(true); setPlayFull(false);
+        playRangeAt(sv-1,ev-1);
+      }
+    }
+  }
 
-      // ── Cloud Sync ──
-      const syncWithCloud = useCallback(async (urlToUse) => {
-        const url = urlToUse !== undefined ? urlToUse : apiUrl;
-        if (!url) {
-          setTodos(ls.get('local_todos', FALLBACK_TODOS));
-          setInfos(ls.get('local_infos', FALLBACK_INFOS));
-          const lu = ls.get('local_users', null);
-          if (lu) setUsers(lu);
-          setApiConnected(false);
-          return;
-        }
-        setSyncing(true);
-        try {
-          // ✅ FIX #5: Tambah no-cors fallback dan timeout untuk handle GAS lambat
-          const controller = new AbortController();
-          const tid = setTimeout(() => controller.abort(), 10000);
-          const [tRes, iRes, uRes] = await Promise.all([
-            fetch(`${url}?action=getTodos`, { signal: controller.signal }),
-            fetch(`${url}?action=getInfos`, { signal: controller.signal }),
-            fetch(`${url}?action=getUsers`, { signal: controller.signal }),
-          ]);
-          clearTimeout(tid);
-          const [tData, iData, uData] = await Promise.all([tRes.json(), iRes.json(), uRes.json()]);
-          if (tData.status === 'success') { setTodos(tData.data); ls.set('local_todos', tData.data); setApiConnected(true); }
-          if (iData.status === 'success') { setInfos(iData.data); ls.set('local_infos', iData.data); }
-          if (uData.status === 'success') { setUsers(uData.data); ls.set('local_users', uData.data); }
-        } catch(err) {
-          console.warn('Sync gagal, pakai cache lokal:', err.message);
-          setTodos(ls.get('local_todos', FALLBACK_TODOS));
-          setInfos(ls.get('local_infos', FALLBACK_INFOS));
-          const lu = ls.get('local_users', null);
-          if (lu) setUsers(lu);
-          setApiConnected(false);
-        } finally { setSyncing(false); }
-      }, [apiUrl]);
+  // ── AUTH ──
+  function handleRegister(ev){
+    ev.preventDefault(); setAuthErr(''); setAuthOk('');
+    if(regForm.password.length<3){ setAuthErr('Password minimal 3 karakter!'); return; }
+    var uL=regForm.username.toLowerCase().trim(), eL=regForm.email.toLowerCase().trim();
+    if(apiUrl){
+      setSyncing(true);
+      fetch(apiUrl,{method:'POST',mode:'cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'registerUser',username:uL,email:eL,password:regForm.password})})
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          if(d.status==='success'){ setAuthOk('Registrasi berhasil! Silakan masuk.'); setLoginForm({username:uL,password:regForm.password}); setRegMode(false); }
+          else setAuthErr(d.message||'Registrasi gagal.');
+        })
+        .catch(function(){ setAuthErr('Gagal terhubung ke cloud backend.'); })
+        .finally(function(){ setSyncing(false); });
+    } else {
+      var cur=ls.get('local_users',[]);
+      if(cur.some(function(u){ return u.username.toLowerCase()===uL||u.email.toLowerCase()===eL; })){ setAuthErr('Username atau Email sudah terdaftar!'); return; }
+      var newU={username:uL,email:eL,password:regForm.password,role:cur.length===0?'admin':'user'};
+      var upd=[].concat(cur,[newU]); ls.set('local_users',upd); setUsers(upd);
+      setAuthOk('Registrasi berhasil!'); setLoginForm({username:uL,password:regForm.password}); setRegMode(false);
+    }
+  }
 
-      useEffect(() => {
-        if (apiUrl) ls.setStr('gas_api_url', apiUrl);
-        syncWithCloud(apiUrl);
-        loadQuranSurahs();
-      }, [apiUrl]);
+  function localLogin(q){
+    var cur=ls.get('local_users',[]);
+    var m=cur.find(function(u){ return (u.username.toLowerCase()===q||u.email.toLowerCase()===q)&&u.password.toString()===loginForm.password.toString(); });
+    if(m){ var s={username:m.username,email:m.email,role:m.role}; setCurrentUser(s); ls.set('active_user',s); syncCloud(apiUrl); }
+    else setAuthErr('Username atau password salah.');
+  }
 
-      // ── Quran ──
-      const loadQuranSurahs = async () => {
-        setLoadingQuran(true);
-        try {
-          const res = await fetch('https://api.alquran.cloud/v1/surah');
-          const data = await res.json();
-          if (data.code === 200) setQuranSurahs(data.data);
-        } catch(e) { showToast('Gagal memuat daftar Al-Quran', 'error'); }
-        finally { setLoadingQuran(false); }
-      };
+  function handleLogin(ev){
+    ev.preventDefault(); setAuthErr('');
+    if(!loginForm.username||!loginForm.password){ setAuthErr('Mohon isi username dan password!'); return; }
+    var q=loginForm.username.toLowerCase().trim();
+    if(apiUrl){
+      setSyncing(true);
+      fetch(apiUrl+'?action=getUsers')
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          if(d.status==='success'){
+            var m=d.data.find(function(u){ return (u.username.toString().toLowerCase().trim()===q||u.email.toString().toLowerCase().trim()===q)&&u.password.toString()===loginForm.password.toString(); });
+            if(m){ var s={username:m.username,email:m.email,role:m.role||'user'}; setCurrentUser(s); ls.set('active_user',s); syncCloud(apiUrl); }
+            else setAuthErr('Username atau password salah / Akun belum disetujui admin.');
+          } else setAuthErr('Error verifikasi kredensial.');
+        })
+        .catch(function(){ setAuthErr('Backend tidak merespon, mencoba login lokal...'); localLogin(q); })
+        .finally(function(){ setSyncing(false); });
+    } else { localLogin(q); }
+  }
 
-      const viewSurahDetails = async (surahNumber, qariId = selectedQari) => {
-        setLoadingQuran(true);
-        isPlayingFullSurahRef.current = false; isPlayingRangeRef.current = false;
-        setIsPlayingFullSurah(false); setIsPlayingRange(false);
-        setStartAyah(''); setEndAyah('');
-        try {
-          const res = await fetch(`https://api.alquran.cloud/v1/surah/${surahNumber}/editions/quran-uthmani,id.indonesian,${qariId}`);
-          const data = await res.json();
-          if (data.code === 200) {
-            setSurahDetails({
-              info: data.data[0],
-              verses: data.data[0].ayahs.map((a, i) => ({
-                number: a.numberInSurah,
-                text: a.text,
-                translation: data.data[1].ayahs[i].text,
-                audio: data.data[2].ayahs[i].audio
-              }))
-            });
-            setSelectedSurah(surahNumber);
-          }
-        } catch(e) { showToast('Gagal memuat ayat Al-Quran.', 'error'); }
-        finally { setLoadingQuran(false); }
-      };
+  function handleLogout(){
+    setCurrentUser(null); ls.remove('active_user');
+    playFullRef.current=false; playRangeRef.current=false;
+    setPlayFull(false); setPlayRange(false);
+    if(audRef.current) audRef.current.pause();
+    setPlayAud(null);
+  }
 
-      const handlePlayAudio = (audioUrl, verseId) => {
-        isPlayingFullSurahRef.current = false; isPlayingRangeRef.current = false;
-        setIsPlayingFullSurah(false); setIsPlayingRange(false);
-        if (audioRef.current) audioRef.current.pause();
-        if (playingAudio && playingAudio.id === verseId) { setPlayingAudio(null); return; }
-        audioRef.current = new Audio(audioUrl);
-        audioRef.current.play().catch(()=>{});
-        setPlayingAudio({ url: audioUrl, id: verseId });
-        audioRef.current.onended = () => setPlayingAudio(null);
-      };
+  // ── ACTIVITIES ──
+  function postGas(payload,onOk,onFail){
+    setSyncing(true);
+    fetch(apiUrl,{method:'POST',mode:'cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload)})
+      .then(function(r){ return r.json(); })
+      .then(function(d){ if(d.status==='success') onOk(); else { showToast('Gagal: '+d.message,'error'); if(onFail) onFail(); } })
+      .catch(function(){ if(onFail) onFail(); else showToast('Koneksi gagal.','error'); })
+      .finally(function(){ setSyncing(false); });
+  }
 
-      const playSurahVerse = (index) => {
-        if (!isPlayingFullSurahRef.current) return;
-        if (index >= surahDetails.verses.length) { playSurahVerse(0); return; }
-        const verse = surahDetails.verses[index];
-        setCurrentFullSurahIndex(index);
-        if (audioRef.current) audioRef.current.pause();
-        audioRef.current = new Audio(verse.audio);
-        audioRef.current.play().catch(()=>{});
-        setPlayingAudio({ url: verse.audio, id: verse.number });
-        audioRef.current.onended = () => playSurahVerse(index + 1);
-      };
+  function saveActLocally(pl){
+    var list=ls.get('local_todos',FALLBACK_TODOS);
+    var idx=list.findIndex(function(t){ return t.id.toString()===pl.id.toString(); });
+    var upd=idx!==-1?list.map(function(t,i){ return i===idx?pl:t; }):[pl].concat(list);
+    setTodos(upd); ls.set('local_todos',upd); setModalOpen(false); showToast('Tugas disimpan lokal!');
+  }
 
-      const handlePlayFullSurah = () => {
-        if (!surahDetails) return;
-        if (isPlayingFullSurahRef.current) {
-          if (audioRef.current) audioRef.current.pause();
-          isPlayingFullSurahRef.current = false; setIsPlayingFullSurah(false); setPlayingAudio(null);
-        } else {
-          isPlayingFullSurahRef.current = true; isPlayingRangeRef.current = false;
-          setIsPlayingFullSurah(true); setIsPlayingRange(false);
-          playSurahVerse(0);
-        }
-      };
+  function handleSaveAct(ev){
+    ev.preventDefault();
+    if(currentUser.role!=='admin'){ showToast('Hanya Administrator yang dapat memanipulasi rencana kerja!','error'); return; }
+    var pl={action:'saveTodo',id:actForm.id||Date.now().toString(),task:actForm.task,subActivity:actForm.subActivity,pic:actForm.pic,startDate:toInputDate(actForm.startDate)||todayStr(),endDate:toInputDate(actForm.endDate),progress:Number(actForm.progress),keterangan:actForm.keterangan||'',createdBy:currentUser.username};
+    if(apiUrl) postGas(pl,function(){ setModalOpen(false); showToast('Rencana kerja disimpan!'); syncCloud(apiUrl); },function(){ saveActLocally(pl); });
+    else saveActLocally(pl);
+  }
 
-      const playSurahVerseRange = (currIndex, endIndex) => {
-        if (!isPlayingRangeRef.current) return;
-        const startVal = parseInt(startAyah, 10) || 1;
-        if (currIndex > endIndex || currIndex >= surahDetails.verses.length) { playSurahVerseRange(startVal - 1, endIndex); return; }
-        const verse = surahDetails.verses[currIndex];
-        setCurrentFullSurahIndex(currIndex);
-        if (audioRef.current) audioRef.current.pause();
-        audioRef.current = new Audio(verse.audio);
-        audioRef.current.play().catch(()=>{});
-        setPlayingAudio({ url: verse.audio, id: verse.number });
-        audioRef.current.onended = () => playSurahVerseRange(currIndex + 1, endIndex);
-      };
+  function handleDelAct(id){
+    askConfirm('Yakin ingin menghapus rencana kerja ini?',function(){
+      if(apiUrl) postGas({action:'deleteTodo',id:id},function(){ showToast('Agenda terhapus!'); syncCloud(apiUrl); },function(){ delActLocally(id); });
+      else delActLocally(id);
+    });
+  }
 
-      const handleQuranPlayback = () => {
-        if (!surahDetails) return;
-        if (quranPlayMode === 'full') { handlePlayFullSurah(); return; }
-        if (isPlayingRangeRef.current) {
-          if (audioRef.current) audioRef.current.pause();
-          isPlayingRangeRef.current = false; setIsPlayingRange(false); setPlayingAudio(null);
-        } else {
-          const sv = parseInt(startAyah, 10);
-          const ev = parseInt(endAyah, 10) || surahDetails.info.numberOfAyahs;
-          if (isNaN(sv) || sv < 1 || sv > surahDetails.info.numberOfAyahs) { showToast('Nomor ayat awal tidak valid!', 'error'); return; }
-          if (isNaN(ev) || ev < sv || ev > surahDetails.info.numberOfAyahs) { showToast('Nomor ayat akhir tidak valid!', 'error'); return; }
-          isPlayingRangeRef.current = true; isPlayingFullSurahRef.current = false;
-          setIsPlayingRange(true); setIsPlayingFullSurah(false);
-          playSurahVerseRange(sv - 1, ev - 1);
-        }
-      };
+  function delActLocally(id){
+    var upd=ls.get('local_todos',[]).filter(function(t){ return t.id.toString()!==id.toString(); });
+    setTodos(upd); ls.set('local_todos',upd); showToast('Agenda terhapus lokal!');
+  }
 
-      // ── Auth ──
-      const handleRegister = async (e) => {
-        e.preventDefault(); setAuthError(''); setAuthSuccess('');
-        if (regForm.password.length < 3) { setAuthError('Password minimal 3 karakter!'); return; }
-        const uL = regForm.username.toLowerCase().trim();
-        const eL = regForm.email.toLowerCase().trim();
-        if (apiUrl) {
-          setSyncing(true);
-          try {
-            const res = await fetch(apiUrl, { method:'POST', mode:'cors', headers:{'Content-Type':'text/plain'}, body:JSON.stringify({ action:'registerUser', username:uL, email:eL, password:regForm.password }) });
-            const data = await res.json();
-            if (data.status === 'success') { setAuthSuccess('Registrasi berhasil! Silakan masuk.'); setLoginForm({ username:uL, password:regForm.password }); setIsRegisterMode(false); }
-            else setAuthError(data.message || 'Registrasi gagal.');
-          } catch(err) { setAuthError('Gagal terhubung ke cloud backend.'); }
-          finally { setSyncing(false); }
-        } else {
-          const curUsers = ls.get('local_users', []);
-          if (curUsers.some(u => u.username.toLowerCase()===uL || u.email.toLowerCase()===eL)) { setAuthError('Username atau Email sudah terdaftar!'); return; }
-          const newUser = { username:uL, email:eL, password:regForm.password, role: curUsers.length===0 ? 'admin' : 'user' };
-          const upd = [...curUsers, newUser]; ls.set('local_users', upd); setUsers(upd);
-          setAuthSuccess('Registrasi berhasil! Masuk menggunakan akun Anda.');
-          setLoginForm({ username:uL, password:regForm.password }); setIsRegisterMode(false);
-        }
-      };
+  function handleMarkDone(act){
+    if(currentUser.role!=='admin') return;
+    var pl=Object.assign({},act,{action:'saveTodo',startDate:toInputDate(act.startDate),endDate:toInputDate(act.endDate),progress:100});
+    if(apiUrl) postGas(pl,function(){ showToast('Progress 100%!'); syncCloud(apiUrl); },function(){ saveActLocally(pl); });
+    else saveActLocally(pl);
+  }
 
-      const attemptLocalLogin = (queryStr) => {
-        const curUsers = ls.get('local_users', []);
-        const m = curUsers.find(u => (u.username.toLowerCase()===queryStr || u.email.toLowerCase()===queryStr) && u.password.toString()===loginForm.password.toString());
-        if (m) { const s = { username:m.username, email:m.email, role:m.role }; setCurrentUser(s); ls.set('active_user', s); syncWithCloud(); }
-        else setAuthError('Username atau password salah.');
-      };
+  function handleEditAct(act){
+    setActForm({id:act.id,task:act.task,subActivity:act.subActivity,pic:act.pic,startDate:toInputDate(act.startDate),endDate:toInputDate(act.endDate),progress:act.progress,keterangan:act.keterangan||'',createdBy:act.createdBy});
+    setIsEditing(true); setModalOpen(true);
+  }
 
-      const handleLogin = async (e) => {
-        e.preventDefault(); setAuthError('');
-        if (!loginForm.username || !loginForm.password) { setAuthError('Mohon isi username dan password!'); return; }
-        const qStr = loginForm.username.toLowerCase().trim();
-        if (apiUrl) {
-          setSyncing(true);
-          try {
-            const res = await fetch(`${apiUrl}?action=getUsers`);
-            const data = await res.json();
-            if (data.status === 'success') {
-              const m = data.data.find(u => (u.username.toString().toLowerCase().trim()===qStr || u.email.toString().toLowerCase().trim()===qStr) && u.password.toString()===loginForm.password.toString());
-              if (m) { const s = { username:m.username, email:m.email, role:m.role||'user' }; setCurrentUser(s); ls.set('active_user', s); syncWithCloud(); }
-              else setAuthError('Username atau password salah / Akun belum disetujui admin.');
-            } else setAuthError('Error memverifikasi kredensial.');
-          } catch(err) { setAuthError('Backend Cloud tidak merespon. Mencoba login lokal...'); attemptLocalLogin(qStr); }
-          finally { setSyncing(false); }
-        } else { attemptLocalLogin(qStr); }
-      };
+  function handleDateClick(ds){
+    if(currentUser.role!=='admin') return;
+    setActForm({id:'',task:'',subActivity:'',pic:'',startDate:toInputDate(ds),endDate:toInputDate(ds),progress:0,keterangan:'',createdBy:currentUser.username});
+    setIsEditing(false); setModalOpen(true);
+  }
 
-      const handleLogout = () => {
-        setCurrentUser(null); ls.remove('active_user');
-        isPlayingFullSurahRef.current = false; isPlayingRangeRef.current = false;
-        setIsPlayingFullSurah(false); setIsPlayingRange(false);
-        if (audioRef.current) audioRef.current.pause();
-        setPlayingAudio(null);
-      };
+  function submitKet(ev){
+    ev.preventDefault();
+    if(currentUser.role!=='admin') return;
+    var pl={action:'saveTodo',id:ketModal.todo.id.toString(),task:ketModal.todo.task,subActivity:ketModal.todo.subActivity,pic:ketModal.todo.pic,startDate:toInputDate(ketModal.todo.startDate),endDate:toInputDate(ketModal.todo.endDate),progress:Number(ketModal.todo.progress),keterangan:ketModal.text,createdBy:ketModal.todo.createdBy||currentUser.username};
+    var close=function(){ setKetModal({isOpen:false,todo:null,text:''}); };
+    if(apiUrl) postGas(pl,function(){ showToast('Keterangan diperbarui!'); syncCloud(apiUrl); close(); },function(){ saveActLocally(pl); close(); });
+    else { saveActLocally(pl); close(); }
+  }
 
-      // ── Activities (Todos) ──
-      const handleSaveActivity = async (e) => {
-        e.preventDefault();
-        if (currentUser.role !== 'admin') { showToast('Hanya Administrator yang dapat memanipulasi rencana kerja!', 'error'); return; }
-        const payload = { action:'saveTodo', id: activityForm.id || Date.now().toString(), task:activityForm.task, subActivity:activityForm.subActivity, pic:activityForm.pic, startDate:formatToInputDate(activityForm.startDate) || todayInputDate(), endDate:formatToInputDate(activityForm.endDate), progress:Number(activityForm.progress), keterangan:activityForm.keterangan||'', createdBy:currentUser.username };
-        if (apiUrl) {
-          setSyncing(true);
-          try {
-            const res = await fetch(apiUrl, { method:'POST', mode:'cors', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(payload) });
-            const data = await res.json();
-            if (data.status === 'success') { setIsModalOpen(false); showToast('Rencana kerja berhasil disimpan!'); syncWithCloud(); }
-            else showToast('Gagal menyimpan: ' + data.message, 'error');
-          } catch(err) { showToast('Koneksi Cloud gagal. Disimpan lokal.', 'warning'); saveActivityLocally(payload); }
-          finally { setSyncing(false); }
-        } else { saveActivityLocally(payload); }
-      };
+  // ── INFOS ──
+  function saveInfoLocally(pl){
+    var list=ls.get('local_infos',FALLBACK_INFOS);
+    var idx=list.findIndex(function(i){ return i.id.toString()===pl.id.toString(); });
+    var upd=idx!==-1?list.map(function(i,x){ return x===idx?pl:i; }):[pl].concat(list);
+    setInfos(upd); ls.set('local_infos',upd); setInfoModal(false); setInfoForm({id:'',title:'',content:''}); setEditingInfo(false); showToast('Informasi disimpan lokal!');
+  }
 
-      const saveActivityLocally = (payload) => {
-        const list = ls.get('local_todos', FALLBACK_TODOS);
-        const idx = list.findIndex(t => t.id.toString()===payload.id.toString());
-        const upd = idx !== -1 ? list.map((t,i) => i===idx ? payload : t) : [payload, ...list];
-        setTodos(upd); ls.set('local_todos', upd); setIsModalOpen(false); showToast('Tugas disimpan lokal!');
-      };
+  function handleSaveInfo(ev){
+    ev.preventDefault();
+    if(currentUser.role!=='admin'){ showToast('Hanya Administrator yang dapat menambahkan informasi!','error'); return; }
+    var pl={action:'saveInfo',id:infoForm.id||Date.now().toString(),title:infoForm.title,content:infoForm.content,timestamp:new Date().toISOString(),createdBy:currentUser.username};
+    if(apiUrl) postGas(pl,function(){ setInfoModal(false); setInfoForm({id:'',title:'',content:''}); setEditingInfo(false); showToast(editingInfo?'Pengumuman direvisi!':'Pengumuman dipublikasikan!'); syncCloud(apiUrl); },function(){ saveInfoLocally(pl); });
+    else saveInfoLocally(pl);
+  }
 
-      const handleDeleteActivity = (activityId) => {
-        askConfirmation('Apakah Anda yakin ingin menghapus rencana kerja ini?', async () => {
-          if (apiUrl) {
-            setSyncing(true);
-            try {
-              const res = await fetch(apiUrl, { method:'POST', mode:'cors', headers:{'Content-Type':'text/plain'}, body:JSON.stringify({ action:'deleteTodo', id:activityId }) });
-              const data = await res.json();
-              if (data.status === 'success') { showToast('Agenda terhapus!'); syncWithCloud(); }
-              else showToast('Gagal menghapus: ' + data.message, 'error');
-            } catch(err) { deleteActivityLocally(activityId); }
-            finally { setSyncing(false); }
-          } else { deleteActivityLocally(activityId); }
-        });
-      };
+  function handleDelInfo(id){
+    askConfirm('Yakin ingin menghapus pengumuman ini?',function(){
+      if(apiUrl) postGas({action:'deleteInfo',id:id},function(){ showToast('Pengumuman terhapus!'); syncCloud(apiUrl); },function(){
+        var upd=ls.get('local_infos',[]).filter(function(i){ return i.id.toString()!==id.toString(); });
+        setInfos(upd); ls.set('local_infos',upd); showToast('Pengumuman terhapus lokal!');
+      });
+      else {
+        var upd=ls.get('local_infos',[]).filter(function(i){ return i.id.toString()!==id.toString(); });
+        setInfos(upd); ls.set('local_infos',upd); showToast('Pengumuman terhapus lokal!');
+      }
+    });
+  }
 
-      const deleteActivityLocally = (actId) => {
-        const upd = ls.get('local_todos', []).filter(t => t.id.toString()!==actId.toString());
-        setTodos(upd); ls.set('local_todos', upd); showToast('Agenda terhapus lokal!');
-      };
+  function saveSettings(ev){
+    ev.preventDefault(); ls.setStr('gas_api_url',apiUrl); syncCloud(apiUrl); showToast('URL GAS berhasil disimpan!');
+  }
 
-      const handleMarkDone = async (activity) => {
-        if (currentUser.role !== 'admin') return;
-        const payload = { action:'saveTodo', ...activity, startDate:formatToInputDate(activity.startDate), endDate:formatToInputDate(activity.endDate), progress:100 };
-        if (apiUrl) {
-          setSyncing(true);
-          try { const res = await fetch(apiUrl, { method:'POST', mode:'cors', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(payload) }); const data = await res.json(); if (data.status==='success') { showToast('Progress diperbarui ke 100%!'); syncWithCloud(); } }
-          catch(err) { saveActivityLocally(payload); }
-          finally { setSyncing(false); }
-        } else { saveActivityLocally(payload); }
-      };
+  // ── COMPUTED ──
+  var sorted = [].concat(todos).sort(function(a,b){
+    var da=new Date(toInputDate(a.startDate)), db=new Date(toInputDate(b.startDate));
+    if(isNaN(da)) return 1; if(isNaN(db)) return -1; return da-db;
+  });
+  var last=page*rowsPerPage, first=last-rowsPerPage;
+  var curTodos=sorted.slice(first,last);
+  var totalPages=Math.ceil(sorted.length/rowsPerPage);
 
-      const handleEditClick = (activity) => {
-        setActivityForm({ id:activity.id, task:activity.task, subActivity:activity.subActivity, pic:activity.pic, startDate:formatToInputDate(activity.startDate), endDate:formatToInputDate(activity.endDate), progress:activity.progress, keterangan:activity.keterangan||'', createdBy:activity.createdBy });
-        setIsEditing(true); setIsModalOpen(true);
-      };
+  // ── Helper untuk class tab ──
+  function tabCls(id){ return 'flex-1 min-w-[90px] flex-shrink-0 py-3 px-2 text-xs font-bold rounded-xl transition-all '+(currentTab===id?'bg-gradient-to-r from-emerald-600/10 to-[#235E52]/10 text-emerald-600 dark:text-emerald-400':'text-stone-400 hover:text-stone-600'); }
 
-      const handleDateClick = (dateStr) => {
-        if (currentUser.role !== 'admin') return;
-        setActivityForm({ id:'', task:'', subActivity:'', pic:'', startDate:formatToInputDate(dateStr), endDate:formatToInputDate(dateStr), progress:0, keterangan:'', createdBy:currentUser.username });
-        setIsEditing(false); setIsModalOpen(true);
-      };
+  // ─── RENDER ───────────────────────────────────────────────────
+  return e('div',{className:'flex-grow flex flex-col min-h-screen relative'},
 
-      const submitKeterangan = async (e) => {
-        e.preventDefault();
-        if (currentUser.role !== 'admin') return;
-        const payload = { action:'saveTodo', id:keteranganModal.todo.id.toString(), task:keteranganModal.todo.task, subActivity:keteranganModal.todo.subActivity, pic:keteranganModal.todo.pic, startDate:formatToInputDate(keteranganModal.todo.startDate), endDate:formatToInputDate(keteranganModal.todo.endDate), progress:Number(keteranganModal.todo.progress), keterangan:keteranganModal.text, createdBy:keteranganModal.todo.createdBy||currentUser.username };
-        if (apiUrl) {
-          setSyncing(true);
-          try { const res = await fetch(apiUrl, { method:'POST', mode:'cors', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(payload) }); const data = await res.json(); if (data.status==='success') { showToast('Keterangan berhasil diperbarui!'); syncWithCloud(); setKeteranganModal({ isOpen:false, todo:null, text:'' }); } else showToast('Gagal: ' + data.message, 'error'); }
-          catch(err) { saveActivityLocally(payload); setKeteranganModal({ isOpen:false, todo:null, text:'' }); }
-          finally { setSyncing(false); }
-        } else { saveActivityLocally(payload); setKeteranganModal({ isOpen:false, todo:null, text:'' }); }
-      };
+    // Toast
+    e(Toast,{show:toast.show,message:toast.message,type:toast.type}),
 
-      // ── Infos ──
-      const handleSaveInfo = async (e) => {
-        e.preventDefault();
-        if (currentUser.role !== 'admin') { showToast('Hanya Administrator yang dapat menambahkan informasi!', 'error'); return; }
-        const payload = { action:'saveInfo', id:infoForm.id||Date.now().toString(), title:infoForm.title, content:infoForm.content, timestamp:new Date().toISOString(), createdBy:currentUser.username };
-        if (apiUrl) {
-          setSyncing(true);
-          try { const res = await fetch(apiUrl, { method:'POST', mode:'cors', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(payload) }); const data = await res.json(); if (data.status==='success') { setIsInfoModalOpen(false); setInfoForm({ id:'',title:'',content:'' }); setIsEditingInfo(false); showToast(isEditingInfo?'Pengumuman direvisi!':'Pengumuman dipublikasikan!'); syncWithCloud(); } else showToast('Gagal: ' + data.message, 'error'); }
-          catch(err) { showToast('Koneksi Cloud bermasalah. Disimpan lokal.', 'warning'); saveInfoLocally(payload); }
-          finally { setSyncing(false); }
-        } else { saveInfoLocally(payload); }
-      };
+    // Confirm Modal
+    e(ConfirmModal,{isOpen:confirm.isOpen,message:confirm.message,
+      onCancel:function(){ setConfirm({isOpen:false,message:'',action:null}); },
+      onConfirm:function(){ var fn=confirm.action; setConfirm({isOpen:false,message:'',action:null}); if(fn) fn(); }
+    }),
 
-      const saveInfoLocally = (payload) => {
-        const list = ls.get('local_infos', FALLBACK_INFOS);
-        const idx = list.findIndex(i => i.id.toString()===payload.id.toString());
-        const upd = idx !== -1 ? list.map((i,x) => x===idx ? payload : i) : [payload, ...list];
-        setInfos(upd); ls.set('local_infos', upd); setIsInfoModalOpen(false); setInfoForm({ id:'',title:'',content:'' }); setIsEditingInfo(false); showToast('Informasi disimpan lokal!');
-      };
+    // URL Modal
+    urlModal && e('div',{className:'fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm'},
+      e('div',{className:'w-full max-w-md bg-white dark:bg-stone-900 rounded-3xl p-6 border border-stone-100 dark:border-stone-800 shadow-2xl'},
+        e('h3',{className:'text-sm font-bold text-slate-800 dark:text-stone-100 mb-2 flex items-center'},
+          e('i',{className:'fa-solid fa-database text-emerald-600 mr-2'}),' Pengaturan URL Database'
+        ),
+        e('p',{className:'text-xs text-stone-500 dark:text-stone-400 mb-4'},'Masukkan tautan Web API Google Apps Script Anda untuk mengaktifkan sinkronisasi Cloud.'),
+        e('input',{type:'url',className:'w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950 text-xs focus:outline-none mb-4',placeholder:'https://script.google.com/macros/s/.../exec',value:urlInput,onChange:function(ev){ setUrlInput(ev.target.value); }}),
+        e('div',{className:'flex space-x-2'},
+          e('button',{onClick:function(){ setUrlModal(false); },className:'flex-1 py-2.5 rounded-xl border border-stone-200 text-xs font-bold text-stone-500'},'Tutup'),
+          e('button',{onClick:function(){ setApiUrl(urlInput); ls.setStr('gas_api_url',urlInput); setUrlModal(false); showToast('URL Database disimpan!'); syncCloud(urlInput); },className:'flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700'},'Simpan & Terapkan')
+        )
+      )
+    ),
 
-      const handleEditInfo = (info) => { setInfoForm({ id:info.id, title:info.title, content:info.content }); setIsEditingInfo(true); setIsInfoModalOpen(true); };
+    // Header
+    e('header',{className:'bg-[#0B2B26] text-white px-4 py-3 sticky top-0 z-30 shadow-md flex items-center justify-between'},
+      e('div',{className:'flex items-center space-x-2.5'},
+        e('div',{className:'bg-white p-1 rounded-xl flex items-center justify-center shadow-sm w-10 h-10 overflow-hidden'},
+          e('img',{src:'https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/Logo_Kementerian_Agama_Republik_Indonesia.png/120px-Logo_Kementerian_Agama_Republik_Indonesia.png',alt:'Logo',className:'h-8 w-8 object-contain'})
+        ),
+        e('div',null,
+          e('h1',{className:'text-lg font-bold tracking-tight'},'mani',e('span',{style:{color:'#D4AF37'}},'calendar')),
+          e('p',{className:'text-[10px] text-stone-300 font-semibold tracking-wider'},'Madrasah Activity Planner')
+        )
+      ),
+      e('div',{className:'flex items-center space-x-3'},
+        e('button',{onClick:function(){ setTheme(function(t){ return t==='light'?'dark':'light'; }); },className:'p-2 rounded-lg hover:bg-stone-800 transition-colors'},
+          e('i',{className:'fa-solid '+(theme==='light'?'fa-moon':'fa-sun')})
+        ),
+        e('span',{className:'text-[10px] px-2 py-1 rounded-full font-bold uppercase '+(apiConnected?'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30':'bg-amber-500/20 text-amber-400 border border-amber-500/30')},
+          e('i',{className:'fa-solid '+(apiConnected?'fa-cloud-sun':'fa-wifi')+' mr-1'}),
+          apiConnected?'Cloud Terkoneksi':'Mode Lokal'
+        ),
+        currentUser && e('button',{onClick:handleLogout,className:'bg-rose-600/35 hover:bg-rose-600 border border-rose-500/40 text-rose-200 text-xs px-3 py-1.5 rounded-xl font-medium transition-all'},
+          e('i',{className:'fa-solid fa-right-from-bracket mr-1'}),'Keluar'
+        )
+      )
+    ),
 
-      const handleDeleteInfo = (infoId) => {
-        askConfirmation('Apakah Anda yakin ingin menghapus pengumuman ini?', async () => {
-          if (apiUrl) {
-            setSyncing(true);
-            try { const res = await fetch(apiUrl, { method:'POST', mode:'cors', headers:{'Content-Type':'text/plain'}, body:JSON.stringify({ action:'deleteInfo', id:infoId }) }); const data = await res.json(); if (data.status==='success') { showToast('Pengumuman terhapus!'); syncWithCloud(); } else showToast('Gagal: '+data.message,'error'); }
-            catch(err) { const upd = ls.get('local_infos',[]).filter(i => i.id.toString()!==infoId.toString()); setInfos(upd); ls.set('local_infos',upd); showToast('Pengumuman terhapus lokal!'); }
-            finally { setSyncing(false); }
-          } else { const upd = ls.get('local_infos',[]).filter(i => i.id.toString()!==infoId.toString()); setInfos(upd); ls.set('local_infos',upd); showToast('Pengumuman terhapus lokal!'); }
-        });
-      };
+    // ── AUTH SCREEN ──
+    !currentUser ? e('main',{className:'flex-grow flex items-center justify-center p-4'},
+      e('div',{className:'w-full max-w-md glass-card rounded-3xl shadow-2xl overflow-hidden p-6 border transition-all relative'},
+        e('div',{className:'text-center mb-6'},
+          e('div',{className:'inline-block bg-[#235E52] text-[#D4AF37] p-4 rounded-3xl mb-3 shadow-inner'},
+            e('i',{className:'fa-solid fa-calendar-check text-3xl'})
+          ),
+          e('h2',{className:'text-2xl font-extrabold text-[#0B2B26] dark:text-stone-100'},'Selamat Datang di manICalendar'),
+          e('p',{className:'text-xs text-stone-500 dark:text-stone-400 mt-1'},'Manajemen Aktivitas & Agenda Madrasah')
+        ),
+        authErr && e('div',{className:'bg-red-500/10 border border-red-500/30 text-red-500 text-xs p-3 rounded-xl mb-4 text-center'},e('i',{className:'fa-solid fa-triangle-exclamation mr-1'}),authErr),
+        authOk  && e('div',{className:'bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 text-xs p-3 rounded-xl mb-4 text-center'},e('i',{className:'fa-solid fa-circle-check mr-1'}),authOk),
 
-      const saveSettings = (e) => { e.preventDefault(); ls.setStr('gas_api_url', apiUrl); syncWithCloud(apiUrl); showToast('URL Google Apps Script berhasil disimpan!'); };
+        regMode
+          ? e('form',{onSubmit:handleRegister,className:'space-y-4'},
+              e('div',null,
+                e('label',{className:'block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1'},'Username / Nama Lengkap'),
+                e('input',{type:'text',required:true,className:'w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-slate-800 dark:text-stone-100',placeholder:'Contoh: Rafliano',value:regForm.username,onChange:function(ev){ setRegForm(function(f){ return Object.assign({},f,{username:ev.target.value}); }); }})
+              ),
+              e('div',null,
+                e('label',{className:'block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1'},'Alamat Email'),
+                e('input',{type:'email',required:true,className:'w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-slate-800 dark:text-stone-100',placeholder:'Contoh: rafli@school.id',value:regForm.email,onChange:function(ev){ setRegForm(function(f){ return Object.assign({},f,{email:ev.target.value}); }); }})
+              ),
+              e('div',null,
+                e('label',{className:'block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1'},'Password (Min 3 Karakter)'),
+                e('div',{className:'relative'},
+                  e('input',{type:showRegPw?'text':'password',required:true,minLength:3,className:'w-full px-4 py-3 pr-10 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-slate-800 dark:text-stone-100',placeholder:'••••••••',value:regForm.password,onChange:function(ev){ setRegForm(function(f){ return Object.assign({},f,{password:ev.target.value}); }); }}),
+                  e('button',{type:'button',onClick:function(){ setShowRegPw(function(v){ return !v; }); },className:'absolute right-3 top-3.5 text-stone-400'},e('i',{className:'fa-solid '+(showRegPw?'fa-eye-slash':'fa-eye')}))
+                )
+              ),
+              e('button',{type:'submit',disabled:syncing,className:'w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-[#235E52] text-white font-bold transition-all disabled:opacity-50'},syncing?e('i',{className:'fa-solid fa-spinner animate-spin'}):'Daftar Akun Baru'),
+              e('div',{className:'text-center text-xs text-stone-500 mt-4'},'Sudah punya akun? ',e('button',{type:'button',onClick:function(){ setRegMode(false); setAuthErr(''); },className:'text-emerald-600 font-bold hover:underline'},'Masuk disini'))
+            )
+          : e('form',{onSubmit:handleLogin,className:'space-y-4'},
+              e('div',null,
+                e('label',{className:'block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1'},'Username atau Email'),
+                e('input',{type:'text',required:true,className:'w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-slate-800 dark:text-stone-100',placeholder:'Masukkan Username atau Email',value:loginForm.username,onChange:function(ev){ setLoginForm(function(f){ return Object.assign({},f,{username:ev.target.value}); }); }})
+              ),
+              e('div',null,
+                e('label',{className:'block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1'},'Password'),
+                e('div',{className:'relative'},
+                  e('input',{type:showPw?'text':'password',required:true,minLength:3,className:'w-full px-4 py-3 pr-10 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-slate-800 dark:text-stone-100',placeholder:'••••••••',value:loginForm.password,onChange:function(ev){ setLoginForm(function(f){ return Object.assign({},f,{password:ev.target.value}); }); }}),
+                  e('button',{type:'button',onClick:function(){ setShowPw(function(v){ return !v; }); },className:'absolute right-3 top-3.5 text-stone-400'},e('i',{className:'fa-solid '+(showPw?'fa-eye-slash':'fa-eye')}))
+                )
+              ),
+              e('button',{type:'submit',disabled:syncing,className:'w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-[#235E52] text-white font-bold transition-all disabled:opacity-50'},syncing?e('i',{className:'fa-solid fa-spinner animate-spin'}):'Masuk Aplikasi'),
+              e('div',{className:'text-center text-xs text-stone-500 mt-4'},'Belum punya akun? ',e('button',{type:'button',onClick:function(){ setRegMode(true); setAuthErr(''); },className:'text-emerald-600 font-bold hover:underline'},'Registrasi disini'))
+            ),
 
-      // ── Computed ──
-      const sortedTodos = [...todos].sort((a,b) => { const da=new Date(formatToInputDate(a.startDate)); const db=new Date(formatToInputDate(b.startDate)); if(isNaN(da)) return 1; if(isNaN(db)) return -1; return da-db; });
-      const idxOfLastRow  = currentPage * rowsPerPage;
-      const idxOfFirstRow = idxOfLastRow - rowsPerPage;
-      const currentTodos  = sortedTodos.slice(idxOfFirstRow, idxOfLastRow);
-      const totalPages    = Math.ceil(sortedTodos.length / rowsPerPage);
+        e('div',{className:'mt-6 pt-4 border-t border-stone-100 dark:border-stone-800 text-center'},
+          e('button',{onClick:function(){ setUrlInput(apiUrl); setUrlModal(true); },className:'text-xs font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl'},
+            e('i',{className:'fa-solid fa-database mr-1'}),' Set URL Database'
+          )
+        )
+      )
+    )
 
-      // ─── RENDER ───────────────────────────────────────────────────
-      return html`
-        <div class="flex-grow flex flex-col min-h-screen relative">
+    // ── MAIN APP ──
+    : e('main',{className:'flex-grow max-w-4xl w-full mx-auto p-4 flex flex-col space-y-4 pb-24'},
 
-          <!-- Toast -->
-          ${toast.show && html`
-            <div class="fixed top-20 right-4 z-50 animate-bounce">
-              <div class=${`px-4 py-3 rounded-2xl shadow-2xl flex items-center space-x-3 text-white border ${toast.type==='success'?'bg-emerald-600 border-emerald-500':toast.type==='error'?'bg-rose-600 border-rose-500':'bg-amber-500 border-amber-400'}`}>
-                ${toast.type==='success'?html`<i class="fa-solid fa-circle-check"></i>`:toast.type==='error'?html`<i class="fa-solid fa-triangle-exclamation"></i>`:html`<i class="fa-solid fa-circle-exclamation"></i>`}
-                <span class="text-xs font-bold">${toast.message}</span>
-              </div>
-            </div>
-          `}
+        // Tab bar
+        e('div',{className:'flex overflow-x-auto no-scrollbar bg-white dark:bg-stone-900 p-1.5 rounded-2xl shadow-sm border border-stone-100 dark:border-stone-800 space-x-1'},
+          [
+            {id:'home',icon:'fa-home',label:'Beranda'},
+            {id:'calendar',icon:'fa-calendar-alt',label:'Kalender'},
+            {id:'quran',icon:'fa-book-quran',label:'Quran'},
+            {id:'radio',icon:'fa-radio',label:'Radio Rodja'},
+            {id:'makkah',icon:'fa-brands fa-youtube',label:'Live Makkah'},
+            {id:'madinah',icon:'fa-brands fa-youtube',label:'Live Madinah'},
+            {id:'info',icon:'fa-circle-info',label:'Informasi'},
+            {id:'settings',icon:'fa-cog',label:'Sistem'},
+          ].map(function(t){
+            return e('button',{key:t.id,onClick:function(){ setCurrentTab(t.id); if(t.id==='home') setPage(1); },className:tabCls(t.id)},
+              e('i',{className:(t.icon.startsWith('fa-brands')?t.icon:'fa-solid '+t.icon)+' text-base block mb-1 text-center'}),
+              ' ',t.label
+            );
+          })
+        ),
 
-          <!-- Confirm Modal -->
-          ${confirmModal.isOpen && html`
-            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-              <div class="w-full max-w-sm bg-white dark:bg-stone-900 rounded-3xl p-6 border border-stone-100 dark:border-stone-800 shadow-2xl text-center">
-                <div class="w-12 h-12 rounded-full bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto mb-3">
-                  <i class="fa-solid fa-circle-question text-xl"></i>
-                </div>
-                <h3 class="text-sm font-bold text-slate-800 dark:text-stone-100 mb-2">Konfirmasi Tindakan</h3>
-                <p class="text-xs text-stone-500 dark:text-stone-400 mb-6">${confirmModal.message}</p>
-                <div class="flex space-x-2">
-                  <button onClick=${()=>setConfirmModal({isOpen:false,message:'',action:null})} class="flex-1 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 text-xs font-bold text-stone-500">Batal</button>
-                  <button onClick=${confirmModal.action} class="flex-1 py-2.5 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 shadow-md">Ya, Jalankan</button>
-                </div>
-              </div>
-            </div>
-          `}
+        // ── HOME TAB ──
+        currentTab==='home' && e('div',{className:'space-y-4'},
+          e('div',{className:'sholat-card text-white p-6 rounded-3xl relative overflow-hidden shadow-xl'},
+            e('div',{className:'absolute right-[-20px] top-[-20px] opacity-10'},e('i',{className:'fa-solid fa-mosque text-9xl'})),
+            e('div',{className:'relative z-10'},
+              e('span',{className:'text-[10px] uppercase font-bold tracking-widest text-emerald-300'},'Ahlan Wa Sahlan Bp/Ibu'),
+              e('h3',{className:'text-2xl font-bold tracking-tight mt-1'},'Assalamualaikum, ',currentUser.username,'!'),
+              e('p',{className:'text-sm text-stone-200 mt-1 font-medium'},'Manajemen Aktifitas Madrasah'),
+              e('div',{className:'flex items-center space-x-2 mt-4 pt-4 border-t border-emerald-800/60'},
+                e('i',{className:'fa-regular fa-calendar-check',style:{color:'#D4AF37'}}),
+                e('span',{className:'text-xs font-medium text-stone-200'},getHijri()),
+                e('span',{className:'text-xs text-emerald-300'},'|'),
+                e('span',{className:'text-xs font-semibold text-stone-200'},formatDateStr(todayStr()))
+              )
+            )
+          ),
+          e('div',{className:'bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800'},
+            e('div',{className:'flex items-center justify-between mb-4'},
+              e('div',{className:'flex items-center space-x-2'},e('i',{className:'fa-solid fa-clock text-emerald-600'}),e('h4',{className:'font-bold text-sm text-[#0B2B26] dark:text-stone-100'},'Jadwal Sholat Hari Ini')),
+              e('a',{href:'https://www.jadwalsholat.org',target:'_blank',rel:'noreferrer',className:'inline-block p-1 bg-stone-50 dark:bg-stone-800 rounded-lg'},
+                e('img',{alt:'jadwal-sholat',src:'https://www.jadwalsholat.org/wp-content/uploads/2013/09/jadwal-sholat.png',width:81,height:18})
+              )
+            ),
+            e('div',{className:'grid grid-cols-5 gap-2 text-center'},
+              SHOLAT.map(function(s){
+                return e('div',{key:s.name,className:'bg-slate-50 dark:bg-stone-800/50 p-2.5 rounded-2xl flex flex-col items-center justify-center border border-stone-100/50 dark:border-stone-800/60'},
+                  e('i',{className:'fa-solid '+s.icon+' text-emerald-600 mb-1 text-sm'}),
+                  e('span',{className:'text-[10px] font-bold text-stone-500 dark:text-stone-400 block'},s.name),
+                  e('span',{className:'text-xs font-extrabold text-[#0B2B26] dark:text-stone-200 mt-1'},s.time)
+                );
+              })
+            )
+          ),
+          // Tabel
+          e('div',{className:'bg-white dark:bg-stone-900 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 overflow-hidden'},
+            e('div',{className:'p-5 border-b border-stone-100 dark:border-stone-800 flex items-center justify-between'},
+              e('div',{className:'flex items-center space-x-2'},e('i',{className:'fa-solid fa-list-check text-emerald-600'}),e('h4',{className:'font-bold text-sm text-[#0B2B26] dark:text-stone-100'},'Rencana Kerja Madrasah')),
+              currentUser.role==='admin' && e('button',{onClick:function(){ handleDateClick(todayStr()); },className:'bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-xl font-bold transition-all shadow-sm flex items-center'},e('i',{className:'fa-solid fa-plus mr-1'}),' Tambah Aktifitas')
+            ),
+            e('div',{className:'overflow-x-auto no-scrollbar'},
+              e('table',{className:'w-full text-left border-collapse'},
+                e('thead',null,
+                  e('tr',{className:'bg-stone-50 dark:bg-stone-800/40 text-[10px] font-extrabold tracking-wider uppercase text-stone-400'},
+                    ['No','Aktifitas & Sub','Tgl Mulai','Tgl Selesai','Progress','PIC','Aksi'].map(function(h,i){
+                      return e('th',{key:i,className:'px-4 py-3'+(i===6?' text-center':'')},h);
+                    })
+                  )
+                ),
+                e('tbody',{className:'divide-y divide-stone-100 dark:divide-stone-800 text-xs'},
+                  curTodos.length===0
+                    ? e('tr',null,e('td',{colSpan:7,className:'text-center py-8 text-stone-400'},'Belum ada agenda rencana kerja terdaftar.'))
+                    : curTodos.map(function(todo,idx){
+                        return e('tr',{key:todo.id,className:'hover:bg-stone-50/50 dark:hover:bg-stone-800/20'},
+                          e('td',{className:'px-4 py-4 font-bold text-stone-400'},first+idx+1),
+                          e('td',{className:'px-4 py-4'},
+                            e('button',{onClick:function(){ setKetModal({isOpen:true,todo:todo,text:todo.keterangan||''}); },className:'text-left group w-full outline-none focus:outline-none'},
+                              e('div',{className:'font-bold text-emerald-700 dark:text-emerald-500 text-sm group-hover:underline cursor-pointer flex items-center'},
+                                todo.task,' ',e('i',{className:'fa-solid fa-arrow-up-right-from-square text-[10px] ml-2 opacity-50 group-hover:opacity-100 transition-opacity'})
+                              ),
+                              e('div',{className:'text-xs text-stone-500 dark:text-stone-400 mt-0.5'},todo.subActivity)
+                            )
+                          ),
+                          e('td',{className:'px-4 py-4 text-stone-600 dark:text-stone-300 font-medium whitespace-nowrap'},formatDateStr(todo.startDate)),
+                          e('td',{className:'px-4 py-4 text-stone-600 dark:text-stone-300 font-medium whitespace-nowrap'},formatDateStr(todo.endDate)),
+                          e('td',{className:'px-4 py-4'},
+                            e('div',{className:'flex items-center space-x-2'},
+                              e('div',{className:'w-16 bg-stone-100 dark:bg-stone-800 rounded-full h-1.5 overflow-hidden'},
+                                e('div',{className:'bg-emerald-600 h-full rounded-full',style:{width:todo.progress+'%'}})
+                              ),
+                              e('span',{className:'font-bold text-[11px]'},todo.progress+'%')
+                            )
+                          ),
+                          e('td',{className:'px-4 py-4 whitespace-nowrap'},e('span',{className:'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-semibold px-2 py-1 rounded-md text-[10px]'},todo.pic)),
+                          e('td',{className:'px-4 py-4 text-center whitespace-nowrap'},
+                            currentUser.role==='admin'
+                              ? e('div',{className:'flex items-center justify-center space-x-1.5'},
+                                  todo.progress<100 && e('button',{onClick:function(){ handleMarkDone(todo); },className:'bg-emerald-500 hover:bg-emerald-600 text-white p-1.5 rounded-lg text-xs',title:'Selesai'},e('i',{className:'fa-solid fa-check'})),
+                                  e('button',{onClick:function(){ handleEditAct(todo); },className:'bg-blue-500 hover:bg-blue-600 text-white p-1.5 rounded-lg text-xs',title:'Ubah'},e('i',{className:'fa-solid fa-edit'})),
+                                  e('button',{onClick:function(){ handleDelAct(todo.id); },className:'bg-red-500 hover:bg-red-600 text-white p-1.5 rounded-lg text-xs',title:'Hapus'},e('i',{className:'fa-solid fa-trash'}))
+                                )
+                              : e('span',{className:'text-stone-400 italic'},'Hanya Lihat')
+                          )
+                        );
+                      })
+                )
+              )
+            ),
+            totalPages>1 && e('div',{className:'p-4 bg-slate-50 dark:bg-stone-900 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between'},
+              e('button',{disabled:page===1,onClick:function(){ setPage(function(p){ return p-1; }); },className:'px-3 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-stone-800 border dark:border-stone-700 disabled:opacity-50 hover:bg-stone-100'},'Sebelumnya'),
+              e('span',{className:'text-xs font-semibold text-stone-500'},'Halaman '+page+' dari '+totalPages),
+              e('button',{disabled:page===totalPages,onClick:function(){ setPage(function(p){ return p+1; }); },className:'px-3 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-stone-800 border dark:border-stone-700 disabled:opacity-50 hover:bg-stone-100'},'Selanjutnya')
+            )
+          )
+        ),
 
-          <!-- URL Modal -->
-          ${isUrlModalOpen && html`
-            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-              <div class="w-full max-w-md bg-white dark:bg-stone-900 rounded-3xl p-6 border border-stone-100 dark:border-stone-800 shadow-2xl">
-                <h3 class="text-sm font-bold text-slate-800 dark:text-stone-100 mb-2 flex items-center">
-                  <i class="fa-solid fa-database text-emerald-600 mr-2"></i> Pengaturan URL Database
-                </h3>
-                <p class="text-xs text-stone-500 dark:text-stone-400 mb-4">Masukkan tautan Web API Google Apps Script Anda untuk mengaktifkan sinkronisasi Cloud.</p>
-                <input type="url" class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950 text-xs focus:outline-none mb-4"
-                  placeholder="https://script.google.com/macros/s/.../exec"
-                  value=${customUrlInput}
-                  onInput=${e=>setCustomUrlInput(e.target.value)} />
-                <div class="flex space-x-2">
-                  <button onClick=${()=>setIsUrlModalOpen(false)} class="flex-1 py-2.5 rounded-xl border border-stone-200 text-xs font-bold text-stone-500">Tutup</button>
-                  <button onClick=${()=>{ setApiUrl(customUrlInput); ls.setStr('gas_api_url',customUrlInput); setIsUrlModalOpen(false); showToast('Database URL berhasil disimpan!'); }}
-                    class="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700">Simpan & Terapkan</button>
-                </div>
-              </div>
-            </div>
-          `}
+        // ── CALENDAR TAB ──
+        currentTab==='calendar' && e('div',{className:'space-y-4'},
+          currentUser.role==='admin'
+            ? e('div',{className:'grid grid-cols-1 md:grid-cols-12 gap-4'},
+                e('div',{className:'bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 md:col-span-5 flex flex-col items-center'},
+                  e('h4',{className:'font-bold text-sm text-[#0B2B26] dark:text-stone-100 mb-3 flex items-center'},e('i',{className:'fa-solid fa-moon text-emerald-600 mr-2'}),' Kalender Hijriyah'),
+                  e('div',{className:'w-full flex items-center justify-center rounded-2xl overflow-hidden bg-slate-50 border border-stone-100'},
+                    e('iframe',{title:'islamic-calendar',style:{width:'250px',height:'312px',border:'none'},scrolling:'no',src:'https://www.islamicfinder.org/islamic-calendar/widgetGregorian?type=Gregorian'})
+                  )
+                ),
+                e('div',{className:'bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 md:col-span-7'},
+                  e('h4',{className:'font-bold text-sm text-[#0B2B26] dark:text-stone-100 flex items-center mb-4'},e('i',{className:'fa-solid fa-calendar-days text-emerald-600 mr-2'}),' Klik Tanggal untuk Tambah Tugas'),
+                  e('div',{className:'grid grid-cols-7 gap-1 text-center font-bold text-[11px] mb-2 text-stone-400'},
+                    ['Min','Sen','Sel','Rab','Kam','Jum','Sab'].map(function(d){ return e('span',{key:d},d); })
+                  ),
+                  e('div',{className:'grid grid-cols-7 gap-1'},
+                    Array.from({length:31},function(_,i){
+                      var dn=i+1, ds='2026-06-'+String(dn).padStart(2,'0');
+                      var dt=todos.filter(function(t){ return toInputDate(t.startDate)<=ds&&toInputDate(t.endDate)>=ds; });
+                      return e('button',{key:dn,onClick:function(){ handleDateClick(ds); },className:'aspect-square flex flex-col justify-between items-center p-1 bg-stone-50 hover:bg-emerald-50 dark:bg-stone-800/40 rounded-xl relative border border-stone-100 dark:border-stone-800 transition-all hover:scale-[1.05]'},
+                        e('span',{className:'text-xs font-bold self-start text-stone-600 dark:text-stone-300'},dn),
+                        dt.length>0&&e('span',{className:'w-2 h-2 rounded-full bg-emerald-500 absolute bottom-1 right-1'})
+                      );
+                    })
+                  )
+                )
+              )
+            : e('div',{className:'bg-white dark:bg-stone-900 p-8 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 flex flex-col items-center justify-center max-w-md mx-auto'},
+                e('h4',{className:'font-bold text-base text-[#0B2B26] dark:text-stone-100 mb-4 flex items-center'},e('i',{className:'fa-solid fa-moon text-emerald-600 mr-2 animate-pulse'}),' Kalender Hijriyah Hari Ini'),
+                e('div',{className:'w-full flex items-center justify-center rounded-2xl overflow-hidden bg-slate-50 dark:bg-stone-800 border border-stone-100 dark:border-stone-800 p-4'},
+                  e('iframe',{title:'islamic-calendar-user',style:{width:'250px',height:'312px',border:'none'},scrolling:'no',src:'https://www.islamicfinder.org/islamic-calendar/widgetGregorian?type=Gregorian'})
+                )
+              )
+        ),
 
-          <!-- Header -->
-          <header class="bg-[#0B2B26] text-white px-4 py-3 sticky top-0 z-30 shadow-md flex items-center justify-between">
-            <div class="flex items-center space-x-2.5">
-              <div class="bg-white p-1 rounded-xl flex items-center justify-center shadow-sm w-10 h-10 overflow-hidden">
-                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/Logo_Kementerian_Agama_Republik_Indonesia.png/120px-Logo_Kementerian_Agama_Republik_Indonesia.png" alt="Logo" class="h-8 w-8 object-contain"/>
-              </div>
-              <div>
-                <h1 class="text-lg font-bold tracking-tight">mani<span style="color:#D4AF37">calendar</span></h1>
-                <p class="text-[10px] text-stone-300 font-semibold tracking-wider">Madrasah Activity Planner</p>
-              </div>
-            </div>
-            <div class="flex items-center space-x-3">
-              <button onClick=${()=>setTheme(theme==='light'?'dark':'light')} class="p-2 rounded-lg hover:bg-stone-800 transition-colors" title="Ganti Tema">
-                ${theme==='light'?html`<i class="fa-solid fa-moon"></i>`:html`<i class="fa-solid fa-sun"></i>`}
-              </button>
-              <span class=${`text-[10px] px-2 py-1 rounded-full font-bold uppercase ${apiConnected?'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30':'bg-amber-500/20 text-amber-400 border border-amber-500/30'}`}>
-                ${apiConnected?html`<i class="fa-solid fa-cloud-sun mr-1"></i>`:html`<i class="fa-solid fa-wifi mr-1"></i>`}
-                ${apiConnected?'Cloud Terkoneksi':'Mode Lokal'}
-              </span>
-              ${currentUser && html`
-                <button onClick=${handleLogout} class="bg-rose-600/35 hover:bg-rose-600 border border-rose-500/40 text-rose-200 text-xs px-3 py-1.5 rounded-xl font-medium transition-all">
-                  <i class="fa-solid fa-right-from-bracket mr-1"></i>Keluar
-                </button>
-              `}
-            </div>
-          </header>
+        // ── QURAN TAB ──
+        currentTab==='quran' && e('div',{className:'space-y-4'},
+          !selSurah
+            ? e('div',{className:'bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800'},
+                e('div',{className:'mb-4'},
+                  e('h4',{className:'font-bold text-sm text-[#0B2B26] dark:text-stone-100 flex items-center mb-2'},e('i',{className:'fa-solid fa-book-open text-emerald-600 mr-2'}),' Portal Al-Quran & Terjemah'),
+                  e('div',{className:'relative'},
+                    e('input',{type:'text',className:'w-full pl-10 pr-4 py-2.5 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500',placeholder:'Cari surat...',value:qSearch,onChange:function(ev){ setQSearch(ev.target.value); }}),
+                    e('i',{className:'fa-solid fa-search text-stone-400 absolute left-3.5 top-3.5 text-xs'})
+                  )
+                ),
+                loadQ
+                  ? e('div',{className:'text-center py-10'},e('i',{className:'fa-solid fa-spinner animate-spin text-emerald-600 text-2xl'}),e('p',{className:'text-xs text-stone-400 mt-2'},'Memuat data Al-Quran...'))
+                  : e('div',{className:'grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto no-scrollbar'},
+                      surahs.filter(function(s){ return s.englishName.toLowerCase().includes(qSearch.toLowerCase())||s.name.includes(qSearch); }).map(function(s){
+                        return e('button',{key:s.number,onClick:function(){ viewSurah(s.number,qari); },className:'p-3.5 rounded-2xl bg-stone-50/50 hover:bg-emerald-50/40 border border-stone-100 dark:bg-stone-800/25 dark:border-stone-800/40 text-left transition-all hover:scale-[1.01] flex items-center justify-between'},
+                          e('div',{className:'flex items-center space-x-3'},
+                            e('span',{className:'bg-emerald-600/10 text-emerald-600 font-bold w-7 h-7 flex items-center justify-center rounded-xl text-xs'},s.number),
+                            e('div',null,
+                              e('div',{className:'font-bold text-xs'},s.englishName),
+                              e('div',{className:'text-[10px] text-stone-400 uppercase tracking-widest'},s.englishNameTranslation+' ('+s.numberOfAyahs+' Ayat)')
+                            )
+                          ),
+                          e('div',{className:'arabic-text text-lg text-emerald-700 font-bold'},s.name)
+                        );
+                      })
+                    )
+              )
+            : e('div',{className:'bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800'},
+                e('div',{className:'flex flex-col space-y-4 pb-3 border-b border-stone-100 dark:border-stone-800 mb-4'},
+                  e('div',{className:'flex items-center justify-between flex-wrap gap-2'},
+                    e('button',{onClick:function(){ setSelSurah(null); setSurahDet(null); playFullRef.current=false; playRangeRef.current=false; setPlayFull(false); setPlayRange(false); setStartAyah(''); setEndAyah(''); if(audRef.current) audRef.current.pause(); },className:'text-xs text-emerald-600 font-bold flex items-center hover:underline'},e('i',{className:'fa-solid fa-arrow-left mr-1'}),' Kembali ke Daftar'),
+                    surahDet && e('div',{className:'text-right'},e('h4',{className:'font-bold text-xs text-slate-800 dark:text-stone-100'},surahDet.info.englishName),e('p',{className:'text-[10px] text-stone-400 font-semibold'},surahDet.info.numberOfAyahs+' Ayat'))
+                  ),
+                  e('div',{className:'grid grid-cols-1 md:grid-cols-2 gap-3 bg-stone-50 dark:bg-stone-800/40 p-4 rounded-2xl border border-stone-100 dark:border-stone-800'},
+                    e('div',{className:'flex flex-col'},
+                      e('label',{className:'text-[9px] font-bold text-stone-400 uppercase tracking-wider mb-1'},e('i',{className:'fa-solid fa-microphone mr-1 text-emerald-600'}),' Pilihan Qari / Reciter'),
+                      e('select',{value:qari,onChange:function(ev){ setQari(ev.target.value); viewSurah(selSurah,ev.target.value); },className:'bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs rounded-xl px-2.5 py-1.5 font-bold text-slate-800 dark:text-stone-200 focus:outline-none'},
+                        QARI_LIST.map(function(q){ return e('option',{key:q.id,value:q.id},q.name); })
+                      )
+                    ),
+                    e('div',{className:'flex flex-col space-y-1.5'},
+                      e('label',{className:'text-[9px] font-bold text-stone-400 uppercase tracking-wider'},e('i',{className:'fa-solid fa-play-circle mr-1 text-emerald-600'}),' Mode Pemutaran'),
+                      e('div',{className:'flex items-center space-x-2'},
+                        e('select',{value:playMode,onChange:function(ev){ setPlayMode(ev.target.value); if(audRef.current) audRef.current.pause(); playFullRef.current=false; playRangeRef.current=false; setPlayFull(false); setPlayRange(false); setPlayAud(null); },className:'bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs rounded-xl px-2 py-1.5 font-bold text-slate-800 dark:text-stone-200 focus:outline-none flex-1'},
+                          e('option',{value:'full'},'Putar Full Surat (Repeat)'),
+                          e('option',{value:'range'},'Putar Ayat Tertentu (Repeat)')
+                        ),
+                        playMode==='range' && e('div',{className:'flex items-center space-x-1'},
+                          e('input',{type:'number',min:1,max:surahDet&&surahDet.info.numberOfAyahs,value:startAyah,onChange:function(ev){ setStartAyah(ev.target.value); },placeholder:'Awal',className:'w-12 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs rounded-xl px-1.5 py-1 text-center font-bold outline-none'}),
+                          e('span',{className:'text-xs text-stone-400'},'-'),
+                          e('input',{type:'number',min:1,max:surahDet&&surahDet.info.numberOfAyahs,value:endAyah,onChange:function(ev){ setEndAyah(ev.target.value); },placeholder:'Akhir',className:'w-12 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs rounded-xl px-1.5 py-1 text-center font-bold outline-none'})
+                        ),
+                        e('button',{onClick:handleQuranPlayback,className:'text-xs px-3.5 py-1.5 rounded-xl font-bold transition-all shadow-sm flex items-center '+((playFull||playRange)?'bg-amber-500 text-white animate-pulse':'bg-emerald-700 text-white hover:bg-emerald-800')},
+                          e('i',{className:'fa-solid '+((playFull||playRange)?'fa-pause':'fa-play')+' mr-1'}),(playFull||playRange)?'Pause':'Mulai'
+                        )
+                      )
+                    )
+                  )
+                ),
+                loadQ||!surahDet
+                  ? e('div',{className:'text-center py-10'},e('i',{className:'fa-solid fa-spinner animate-spin text-emerald-600 text-2xl'}),e('p',{className:'text-xs text-stone-400 mt-2'},'Memuat ayat...'))
+                  : e('div',{className:'space-y-4 max-h-[500px] overflow-y-auto pr-2 no-scrollbar'},
+                      selSurah!==1&&selSurah!==9&&e('div',{className:'text-center arabic-text text-xl py-4 text-emerald-800'},'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ'),
+                      surahDet.verses.map(function(v,vi){
+                        return e('div',{key:v.number,className:'p-4 rounded-2xl border transition-all '+((playFull||playRange)&&playIdx===vi?'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-500/35':'bg-stone-50 dark:bg-stone-800/40 border-stone-100/50 dark:border-stone-800/40')},
+                          e('div',{className:'flex items-center justify-between'},
+                            e('span',{className:'bg-emerald-600/10 text-emerald-600 font-bold text-[10px] w-6 h-6 flex items-center justify-center rounded-lg'},v.number),
+                            e('button',{onClick:function(){ playAudio(v.audio,v.number); },className:'text-xs p-2 rounded-xl transition-all '+(playAud&&playAud.id===v.number&&!playFull&&!playRange?'bg-amber-500 text-white':'bg-emerald-600 text-white')},
+                              e('i',{className:'fa-solid '+(playAud&&playAud.id===v.number&&!playFull&&!playRange?'fa-pause':'fa-volume-high')}),' Play Audio'
+                            )
+                          ),
+                          e('div',{className:'arabic-text text-right text-xl font-bold leading-loose text-slate-800 dark:text-stone-100 py-2'},v.text),
+                          e('div',{className:'text-stone-500 dark:text-stone-400 italic text-[11px] leading-relaxed mt-1'},v.translation)
+                        );
+                      })
+                    )
+              )
+        ),
 
-          <!-- Auth Screen -->
-          ${!currentUser ? html`
-            <main class="flex-grow flex items-center justify-center p-4">
-              <div class="w-full max-w-md glass-card rounded-3xl shadow-2xl overflow-hidden p-6 border transition-all relative">
-                <div class="text-center mb-6">
-                  <div class="inline-block bg-[#235E52] text-[#D4AF37] p-4 rounded-3xl mb-3 shadow-inner">
-                    <i class="fa-solid fa-calendar-check text-3xl"></i>
-                  </div>
-                  <h2 class="text-2xl font-extrabold text-[#0B2B26] dark:text-stone-100">Selamat Datang di manICalendar</h2>
-                  <p class="text-xs text-stone-500 dark:text-stone-400 mt-1">Manajemen Aktivitas & Agenda Madrasah</p>
-                </div>
-                ${authError && html`<div class="bg-red-500/10 border border-red-500/30 text-red-500 text-xs p-3 rounded-xl mb-4 text-center"><i class="fa-solid fa-triangle-exclamation mr-1"></i> ${authError}</div>`}
-                ${authSuccess && html`<div class="bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 text-xs p-3 rounded-xl mb-4 text-center"><i class="fa-solid fa-circle-check mr-1"></i> ${authSuccess}</div>`}
+        currentTab==='radio' && e('div',{className:'space-y-4'},
+          e('div',{className:'bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 flex flex-col h-[500px]'},
+            e('h4',{className:'font-bold text-sm text-[#0B2B26] dark:text-stone-100 mb-3 flex items-center'},e('i',{className:'fa-solid fa-radio text-emerald-600 mr-2'}),' Streaming Radio Rodja'),
+            e('div',{className:'w-full flex-grow rounded-2xl overflow-hidden border border-stone-100 dark:border-stone-800 relative bg-stone-50'},
+              e('iframe',{src:'https://www.radiorodja.com/live/',className:'absolute top-0 left-0 w-full h-full border-none'})
+            )
+          )
+        ),
 
-                ${isRegisterMode ? html`
-                  <form onSubmit=${handleRegister} class="space-y-4">
-                    <div>
-                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Username / Nama Lengkap</label>
-                      <input type="text" required class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-slate-800 dark:text-stone-100" placeholder="Contoh: Rafliano" value=${regForm.username} onInput=${e=>setRegForm({...regForm,username:e.target.value})} />
-                    </div>
-                    <div>
-                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Alamat Email</label>
-                      <input type="email" required class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-slate-800 dark:text-stone-100" placeholder="Contoh: rafli@school.id" value=${regForm.email} onInput=${e=>setRegForm({...regForm,email:e.target.value})} />
-                    </div>
-                    <div>
-                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Password (Min 3 Karakter)</label>
-                      <div class="relative">
-                        <input type=${showRegPassword?'text':'password'} required minLength="3" class="w-full px-4 py-3 pr-10 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-slate-800 dark:text-stone-100" placeholder="••••••••" value=${regForm.password} onInput=${e=>setRegForm({...regForm,password:e.target.value})} />
-                        <button type="button" onClick=${()=>setShowRegPassword(!showRegPassword)} class="absolute right-3 top-3.5 text-stone-400">
-                          <i class=${`fa-solid ${showRegPassword?'fa-eye-slash':'fa-eye'}`}></i>
-                        </button>
-                      </div>
-                    </div>
-                    <button type="submit" disabled=${syncing} class="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-[#235E52] text-white font-bold transition-all transform active:scale-95 disabled:opacity-50">
-                      ${syncing?html`<i class="fa-solid fa-spinner animate-spin"></i>`:'Daftar Akun Baru'}
-                    </button>
-                    <div class="text-center text-xs text-stone-500 mt-4">Sudah punya akun? <button type="button" onClick=${()=>{setIsRegisterMode(false);setAuthError('');}} class="text-emerald-600 font-bold hover:underline">Masuk disini</button></div>
-                  </form>
-                ` : html`
-                  <form onSubmit=${handleLogin} class="space-y-4">
-                    <div>
-                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Username atau Email</label>
-                      <input type="text" required class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-slate-800 dark:text-stone-100" placeholder="Masukkan Username atau Email" value=${loginForm.username} onInput=${e=>setLoginForm({...loginForm,username:e.target.value})} />
-                    </div>
-                    <div>
-                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Password (Min 3 Karakter)</label>
-                      <div class="relative">
-                        <input type=${showPassword?'text':'password'} required minLength="3" class="w-full px-4 py-3 pr-10 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-slate-800 dark:text-stone-100" placeholder="••••••••" value=${loginForm.password} onInput=${e=>setLoginForm({...loginForm,password:e.target.value})} />
-                        <button type="button" onClick=${()=>setShowPassword(!showPassword)} class="absolute right-3 top-3.5 text-stone-400">
-                          <i class=${`fa-solid ${showPassword?'fa-eye-slash':'fa-eye'}`}></i>
-                        </button>
-                      </div>
-                    </div>
-                    <button type="submit" disabled=${syncing} class="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-[#235E52] text-white font-bold transition-all transform active:scale-95 disabled:opacity-50">
-                      ${syncing?html`<i class="fa-solid fa-spinner animate-spin"></i>`:'Masuk Aplikasi'}
-                    </button>
-                    <div class="text-center text-xs text-stone-500 mt-4">Belum punya akun? <button type="button" onClick=${()=>{setIsRegisterMode(true);setAuthError('');}} class="text-emerald-600 font-bold hover:underline">Registrasi disini</button></div>
-                  </form>
-                `}
-                <div class="mt-6 pt-4 border-t border-stone-100 dark:border-stone-800 text-center">
-                  <button onClick=${()=>{setCustomUrlInput(apiUrl);setIsUrlModalOpen(true);}} class="text-xs font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl">
-                    <i class="fa-solid fa-database mr-1"></i> Set URL Database
-                  </button>
-                </div>
-              </div>
-            </main>
-          ` : html`
-            <!-- Main App -->
-            <main class="flex-grow max-w-4xl w-full mx-auto p-4 flex flex-col space-y-4 pb-24">
+        currentTab==='makkah' && e('div',{className:'space-y-4'},
+          e('div',{className:'bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 flex flex-col'},
+            e('h4',{className:'font-bold text-sm text-[#0B2B26] dark:text-stone-100 mb-3 flex items-center'},e('i',{className:'fa-brands fa-youtube text-red-600 mr-2'}),' Live Makkah Al-Mukarramah'),
+            e('div',{className:'relative w-full pb-[56.25%] h-0 rounded-2xl overflow-hidden shadow-inner bg-black'},
+              e('iframe',{src:'https://www.youtube.com/embed/4H9ywg5G-HI?autoplay=1&mute=1',className:'absolute top-0 left-0 w-full h-full border-none',allow:'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture',allowFullScreen:true})
+            )
+          )
+        ),
 
-              <!-- Tab Bar -->
-              <div class="flex overflow-x-auto no-scrollbar bg-white dark:bg-stone-900 p-1.5 rounded-2xl shadow-sm border border-stone-100 dark:border-stone-800 space-x-1">
-                ${[
-                  { id:'home', icon:'fa-home', label:'Beranda' },
-                  { id:'calendar', icon:'fa-calendar-alt', label:'Kalender' },
-                  { id:'quran', icon:'fa-book-quran', label:'Quran' },
-                  { id:'radio', icon:'fa-radio', label:'Radio Rodja' },
-                  { id:'makkah', icon:'fa-brands fa-youtube', label:'Live Makkah' },
-                  { id:'madinah', icon:'fa-brands fa-youtube', label:'Live Madinah' },
-                  { id:'info', icon:'fa-circle-info', label:'Informasi' },
-                  { id:'settings', icon:'fa-cog', label:'Sistem' },
-                ].map(tab => html`
-                  <button key=${tab.id}
-                    onClick=${()=>{ setCurrentTab(tab.id); if(tab.id==='home') setCurrentPage(1); }}
-                    class=${`flex-1 min-w-[90px] flex-shrink-0 py-3 px-2 text-xs font-bold rounded-xl transition-all ${currentTab===tab.id?'bg-gradient-to-r from-emerald-600/10 to-[#235E52]/10 text-emerald-600 dark:text-emerald-400':'text-stone-400 hover:text-stone-600'}`}>
-                    <i class=${`fa-solid ${tab.icon} text-base block mb-1 text-center`}></i> ${tab.label}
-                  </button>
-                `)}
-              </div>
+        currentTab==='madinah' && e('div',{className:'space-y-4'},
+          e('div',{className:'bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 flex flex-col'},
+            e('h4',{className:'font-bold text-sm text-[#0B2B26] dark:text-stone-100 mb-3 flex items-center'},e('i',{className:'fa-brands fa-youtube text-red-600 mr-2'}),' Live Madinah Al-Munawwarah'),
+            e('div',{className:'relative w-full pb-[56.25%] h-0 rounded-2xl overflow-hidden shadow-inner bg-black'},
+              e('iframe',{src:'https://www.youtube.com/embed/DHvS0DC3vTs?autoplay=1&mute=1',className:'absolute top-0 left-0 w-full h-full border-none',allow:'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture',allowFullScreen:true})
+            )
+          )
+        ),
 
-              <!-- HOME TAB -->
-              ${currentTab==='home' && html`
-                <div class="space-y-4">
-                  <div class="sholat-card text-white p-6 rounded-3xl relative overflow-hidden shadow-xl">
-                    <div class="absolute right-[-20px] top-[-20px] opacity-10"><i class="fa-solid fa-mosque text-9xl"></i></div>
-                    <div class="relative z-10">
-                      <span class="text-[10px] uppercase font-bold tracking-widest text-emerald-300">Ahlan Wa Sahlan Bp/Ibu</span>
-                      <h3 class="text-2xl font-bold tracking-tight mt-1">Assalamualaikum, ${currentUser.username}!</h3>
-                      <p class="text-sm text-stone-200 mt-1 font-medium">Manajemen Aktifitas Madrasah</p>
-                      <div class="flex items-center space-x-2 mt-4 pt-4 border-t border-emerald-800/60">
-                        <i class="fa-regular fa-calendar-check text-[#D4AF37]"></i>
-                        <span class="text-xs font-medium text-stone-200">${getHijriDate()}</span>
-                        <span class="text-xs text-emerald-300">|</span>
-                        <span class="text-xs font-semibold text-stone-200">${formatDateStr(todayInputDate())}</span>
-                      </div>
-                    </div>
-                  </div>
+        currentTab==='info' && e('div',{className:'space-y-4'},
+          e('div',{className:'bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800'},
+            e('div',{className:'flex items-center justify-between mb-4 pb-3 border-b border-stone-100 dark:border-stone-800'},
+              e('div',{className:'flex items-center space-x-2'},e('i',{className:'fa-solid fa-bullhorn text-emerald-600'}),e('h4',{className:'font-bold text-sm text-[#0B2B26] dark:text-stone-100'},'Pusat Informasi & Pengumuman Madrasah')),
+              currentUser.role==='admin' && e('button',{onClick:function(){ setInfoForm({id:'',title:'',content:''}); setEditingInfo(false); setInfoModal(true); },className:'bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-xl font-bold transition-all shadow-sm'},e('i',{className:'fa-solid fa-plus mr-1'}),' Buat Informasi')
+            ),
+            e('div',{className:'space-y-3 max-h-[500px] overflow-y-auto pr-2 no-scrollbar'},
+              infos.length===0
+                ? e('div',{className:'text-center py-10 text-stone-400 text-xs'},'Belum ada pengumuman saat ini.')
+                : infos.map(function(info){
+                    return e('div',{key:info.id,className:'p-4 bg-stone-50/50 dark:bg-stone-850 rounded-2xl border border-stone-100 dark:border-stone-800 flex justify-between items-start space-x-4'},
+                      e('div',{className:'space-y-1.5 flex-1'},
+                        e('h5',{className:'font-bold text-xs text-stone-800 dark:text-stone-100 uppercase tracking-wide'},info.title),
+                        e('p',{className:'text-xs text-stone-600 dark:text-stone-400 leading-relaxed whitespace-pre-wrap'},info.content),
+                        e('div',{className:'flex items-center space-x-2 pt-2 text-[10px] text-stone-400 font-medium'},
+                          e('span',null,e('i',{className:'fa-solid fa-clock mr-1'}),formatTimestamp(info.timestamp)),
+                          e('span',null,'•'),
+                          e('span',null,e('i',{className:'fa-solid fa-user mr-1'}),'Oleh: '+info.createdBy)
+                        )
+                      ),
+                      currentUser.role==='admin' && e('div',{className:'flex items-center space-x-2'},
+                        e('button',{onClick:function(){ setInfoForm({id:info.id,title:info.title,content:info.content}); setEditingInfo(true); setInfoModal(true); },className:'text-xs text-blue-600 font-bold flex items-center bg-blue-50 dark:bg-blue-950/40 px-2 py-1 rounded-lg'},e('i',{className:'fa-solid fa-edit mr-1'}),' Revisi'),
+                        e('button',{onClick:function(){ handleDelInfo(info.id); },className:'text-rose-600 p-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40'},e('i',{className:'fa-solid fa-trash'}))
+                      )
+                    );
+                  })
+            )
+          )
+        ),
 
-                  <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
-                    <div class="flex items-center justify-between mb-4">
-                      <div class="flex items-center space-x-2">
-                        <i class="fa-solid fa-clock text-emerald-600"></i>
-                        <h4 class="font-bold text-sm text-[#0B2B26] dark:text-stone-100">Jadwal Sholat Hari Ini</h4>
-                      </div>
-                      <a href="https://www.jadwalsholat.org" target="_blank" rel="noreferrer" class="inline-block p-1 bg-stone-50 dark:bg-stone-800 rounded-lg hover:scale-105 transition-transform">
-                        <img alt="jadwal-sholat" src="https://www.jadwalsholat.org/wp-content/uploads/2013/09/jadwal-sholat.png" width="81" height="18" />
-                      </a>
-                    </div>
-                    <div class="grid grid-cols-5 gap-2 text-center">
-                      ${SHOLAT_TIMES.map(s => html`
-                        <div key=${s.name} class="bg-slate-50 dark:bg-stone-800/50 p-2.5 rounded-2xl flex flex-col items-center justify-center border border-stone-100/50 dark:border-stone-800/60">
-                          <i class=${`fa-solid ${s.icon} text-emerald-600 mb-1 text-sm`}></i>
-                          <span class="text-[10px] font-bold text-stone-500 dark:text-stone-400 block">${s.name}</span>
-                          <span class="text-xs font-extrabold text-[#0B2B26] dark:text-stone-200 mt-1">${s.time}</span>
-                        </div>
-                      `)}
-                    </div>
-                  </div>
+        currentTab==='settings' && e('div',{className:'bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800'},
+          e('h4',{className:'font-bold text-sm text-[#0B2B26] dark:text-stone-100 flex items-center mb-4'},e('i',{className:'fa-solid fa-database text-emerald-600 mr-2'}),' Pengaturan Backend Database'),
+          e('form',{onSubmit:saveSettings,className:'space-y-4'},
+            e('div',{className:'bg-slate-50 dark:bg-stone-800/50 p-4 rounded-2xl border border-stone-100 dark:border-stone-800/60 text-xs leading-relaxed text-stone-500 dark:text-stone-400'},
+              e('p',{className:'font-bold text-stone-700 dark:text-stone-300 mb-1'},e('i',{className:'fa-solid fa-circle-info text-emerald-600 mr-1'}),' Bagaimana cara menghubungkan ke Google Sheets?'),
+              e('p',null,'Gunakan Google Apps Script untuk membuat Web API Anda sendiri secara gratis. Salin link URL Web App yang dideploy, paste ke kolom di bawah ini, lalu klik simpan.')
+            ),
+            e('div',null,
+              e('label',{className:'block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1'},'URL Google Apps Script Web App API'),
+              e('input',{type:'url',className:'w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800 dark:text-stone-100',placeholder:'https://script.google.com/macros/s/.../exec',value:apiUrl,onChange:function(ev){ setApiUrl(ev.target.value); }})
+            ),
+            e('div',{className:'bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 p-3 rounded-xl text-[10px] text-amber-700 dark:text-amber-300 space-y-1'},
+              e('p',{className:'font-bold'},e('i',{className:'fa-solid fa-triangle-exclamation mr-1'}),' Pastikan GAS Anda sudah dikonfigurasi:'),
+              e('p',null,'• Deploy sebagai: Web App'),
+              e('p',null,'• Execute as: Me (your account)'),
+              e('p',null,'• Who has access: Anyone'),
+              e('p',null,'• Header CORS: Access-Control-Allow-Origin: *')
+            ),
+            e('div',{className:'flex space-x-2'},
+              e('button',{type:'submit',className:'flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs py-3 rounded-xl font-bold transition-all'},e('i',{className:'fa-solid fa-cloud-arrow-up mr-1'}),' Simpan URL & Update'),
+              e('button',{type:'button',onClick:function(){ syncCloud(apiUrl); },disabled:syncing,className:'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 text-xs px-4 py-3 rounded-xl font-bold hover:bg-stone-200 transition-all disabled:opacity-50'},
+                syncing?e('i',{className:'fa-solid fa-spinner animate-spin'}):e('i',{className:'fa-solid fa-rotate mr-1'}),' Sinkronisasi'
+              )
+            )
+          )
+        )
+      ),
 
-                  <!-- Tabel Rencana Kerja -->
-                  <div class="bg-white dark:bg-stone-900 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 overflow-hidden">
-                    <div class="p-5 border-b border-stone-100 dark:border-stone-800 flex items-center justify-between">
-                      <div class="flex items-center space-x-2">
-                        <i class="fa-solid fa-list-check text-emerald-600"></i>
-                        <h4 class="font-bold text-sm text-[#0B2B26] dark:text-stone-100">Rencana Kerja Madrasah</h4>
-                      </div>
-                      ${currentUser.role==='admin' && html`
-                        <button onClick=${()=>handleDateClick(todayInputDate())} class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-xl font-bold transition-all shadow-sm flex items-center">
-                          <i class="fa-solid fa-plus mr-1"></i> Tambah Aktifitas
-                        </button>
-                      `}
-                    </div>
-                    <div class="overflow-x-auto no-scrollbar">
-                      <table class="w-full text-left border-collapse">
-                        <thead>
-                          <tr class="bg-stone-50 dark:bg-stone-800/40 text-[10px] font-extrabold tracking-wider uppercase text-stone-400">
-                            <th class="px-4 py-3">No</th>
-                            <th class="px-4 py-3">Aktifitas & Sub</th>
-                            <th class="px-4 py-3">Tgl Mulai</th>
-                            <th class="px-4 py-3">Tgl Selesai</th>
-                            <th class="px-4 py-3">Progress</th>
-                            <th class="px-4 py-3">PIC</th>
-                            <th class="px-4 py-3 text-center">Aksi</th>
-                          </tr>
-                        </thead>
-                        <tbody class="divide-y divide-stone-100 dark:divide-stone-800 text-xs">
-                          ${currentTodos.length===0 ? html`
-                            <tr><td colSpan="7" class="text-center py-8 text-stone-400">Belum ada agenda rencana kerja terdaftar.</td></tr>
-                          ` : currentTodos.map((todo, idx) => html`
-                            <tr key=${todo.id} class="hover:bg-stone-50/50 dark:hover:bg-stone-800/20">
-                              <td class="px-4 py-4 font-bold text-stone-400">${idxOfFirstRow+idx+1}</td>
-                              <td class="px-4 py-4">
-                                <button onClick=${()=>setKeteranganModal({isOpen:true,todo,text:todo.keterangan||''})} class="text-left group w-full outline-none focus:outline-none">
-                                  <div class="font-bold text-emerald-700 dark:text-emerald-500 text-sm group-hover:underline cursor-pointer flex items-center">
-                                    ${todo.task} <i class="fa-solid fa-arrow-up-right-from-square text-[10px] ml-2 opacity-50 group-hover:opacity-100 transition-opacity"></i>
-                                  </div>
-                                  <div class="text-xs text-stone-500 dark:text-stone-400 mt-0.5">${todo.subActivity}</div>
-                                </button>
-                              </td>
-                              <td class="px-4 py-4 text-stone-600 dark:text-stone-300 font-medium whitespace-nowrap">${formatDateStr(todo.startDate)}</td>
-                              <td class="px-4 py-4 text-stone-600 dark:text-stone-300 font-medium whitespace-nowrap">${formatDateStr(todo.endDate)}</td>
-                              <td class="px-4 py-4">
-                                <div class="flex items-center space-x-2">
-                                  <div class="w-16 bg-stone-100 dark:bg-stone-800 rounded-full h-1.5 overflow-hidden">
-                                    <div class="bg-emerald-600 h-full rounded-full" style=${{width:`${todo.progress}%`}}></div>
-                                  </div>
-                                  <span class="font-bold text-[11px]">${todo.progress}%</span>
-                                </div>
-                              </td>
-                              <td class="px-4 py-4 whitespace-nowrap"><span class="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-semibold px-2 py-1 rounded-md text-[10px]">${todo.pic}</span></td>
-                              <td class="px-4 py-4 text-center whitespace-nowrap">
-                                ${currentUser.role==='admin' ? html`
-                                  <div class="flex items-center justify-center space-x-1.5">
-                                    ${todo.progress < 100 && html`<button onClick=${()=>handleMarkDone(todo)} class="bg-emerald-500 hover:bg-emerald-600 text-white p-1.5 rounded-lg text-xs" title="Setujui Selesai"><i class="fa-solid fa-check"></i></button>`}
-                                    <button onClick=${()=>handleEditClick(todo)} class="bg-blue-500 hover:bg-blue-600 text-white p-1.5 rounded-lg text-xs" title="Ubah"><i class="fa-solid fa-edit"></i></button>
-                                    <button onClick=${()=>handleDeleteActivity(todo.id)} class="bg-red-500 hover:bg-red-600 text-white p-1.5 rounded-lg text-xs" title="Hapus"><i class="fa-solid fa-trash"></i></button>
-                                  </div>
-                                ` : html`<span class="text-stone-400 italic">Hanya Lihat</span>`}
-                              </td>
-                            </tr>
-                          `)}
-                        </tbody>
-                      </table>
-                    </div>
-                    ${totalPages>1 && html`
-                      <div class="p-4 bg-slate-50 dark:bg-stone-900 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between">
-                        <button disabled=${currentPage===1} onClick=${()=>setCurrentPage(currentPage-1)} class="px-3 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-stone-800 border dark:border-stone-700 disabled:opacity-50 hover:bg-stone-100">Sebelumnya</button>
-                        <span class="text-xs font-semibold text-stone-500">Halaman ${currentPage} dari ${totalPages}</span>
-                        <button disabled=${currentPage===totalPages} onClick=${()=>setCurrentPage(currentPage+1)} class="px-3 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-stone-800 border dark:border-stone-700 disabled:opacity-50 hover:bg-stone-100">Selanjutnya</button>
-                      </div>
-                    `}
-                  </div>
-                </div>
-              `}
+    // ── MODAL ADD/EDIT ACTIVITY ──
+    modalOpen && e('div',{className:'fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm'},
+      e('div',{className:'w-full max-w-md bg-white dark:bg-stone-900 rounded-3xl shadow-2xl border border-stone-100 dark:border-stone-800 overflow-hidden p-6 relative'},
+        e('button',{onClick:function(){ setModalOpen(false); },className:'absolute top-4 right-4 text-stone-400 hover:text-stone-600'},e('i',{className:'fa-solid fa-circle-xmark text-xl'})),
+        e('h3',{className:'text-base font-bold text-[#0B2B26] dark:text-stone-100 mb-4 flex items-center'},e('i',{className:'fa-solid fa-calendar-plus text-emerald-600 mr-2'}),isEditing?'Ubah Rencana Kerja':'Tambah Rencana Kerja Baru'),
+        e('form',{onSubmit:handleSaveAct,className:'space-y-4 text-xs text-left'},
+          e('div',null,
+            e('label',{className:'block text-[10px] font-bold uppercase text-stone-400 mb-1'},'Uraian Rencana Kerja'),
+            e('textarea',{required:true,maxLength:800,rows:3,className:'w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-800 dark:text-stone-100',placeholder:'Uraian detail tugas sekolah...',value:actForm.task,onChange:function(ev){ setActForm(function(f){ return Object.assign({},f,{task:ev.target.value}); }); }})
+          ),
+          e('div',null,
+            e('label',{className:'block text-[10px] font-bold uppercase text-stone-400 mb-1'},'Sub-Aktifitas'),
+            e('input',{type:'text',required:true,className:'w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-800 dark:text-stone-100',placeholder:'Sub kegiatan penunjang...',value:actForm.subActivity,onChange:function(ev){ setActForm(function(f){ return Object.assign({},f,{subActivity:ev.target.value}); }); }})
+          ),
+          e('div',null,
+            e('label',{className:'block text-[10px] font-bold uppercase text-stone-400 mb-1'},'Penanggung Jawab (PIC)'),
+            e('select',{required:true,className:'w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-800 dark:text-stone-200',value:actForm.pic,onChange:function(ev){ setActForm(function(f){ return Object.assign({},f,{pic:ev.target.value}); }); }},
+              e('option',{value:''},'-- Pilih PIC Admin --'),
+              users.filter(function(u){ return u.role==='admin'; }).map(function(u){ return e('option',{key:u.username,value:u.username},u.username); }),
+              actForm.pic && !users.some(function(u){ return u.username===actForm.pic&&u.role==='admin'; }) && e('option',{value:actForm.pic},actForm.pic)
+            )
+          ),
+          e('div',{className:'grid grid-cols-2 gap-2'},
+            e('div',null,
+              e('label',{className:'block text-[10px] font-bold uppercase text-stone-400 mb-1'},'Tanggal Mulai'),
+              e('input',{type:'date',required:true,className:'w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-800 dark:text-stone-100',value:actForm.startDate,onChange:function(ev){ setActForm(function(f){ return Object.assign({},f,{startDate:ev.target.value}); }); }})
+            ),
+            e('div',null,
+              e('label',{className:'block text-[10px] font-bold uppercase text-stone-400 mb-1'},'Target Selesai'),
+              e('input',{type:'date',required:true,className:'w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-800 dark:text-stone-100',value:actForm.endDate,onChange:function(ev){ setActForm(function(f){ return Object.assign({},f,{endDate:ev.target.value}); }); }})
+            )
+          ),
+          e('div',null,
+            e('label',{className:'block text-[10px] font-bold uppercase text-stone-400 mb-1'},'Progress: '+actForm.progress+'%'),
+            e('input',{type:'range',min:0,max:100,step:5,className:'w-full accent-emerald-600 bg-stone-100 h-1.5 rounded-lg',value:actForm.progress,onChange:function(ev){ setActForm(function(f){ return Object.assign({},f,{progress:Number(ev.target.value)}); }); }})
+          ),
+          e('button',{type:'submit',className:'w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-[#235E52] text-white font-bold transition-all shadow-lg'},e('i',{className:'fa-solid fa-save mr-1'}),' Simpan Rencana Kerja')
+        )
+      )
+    ),
 
-              <!-- CALENDAR TAB -->
-              ${currentTab==='calendar' && html`
-                <div class="space-y-4">
-                  ${currentUser.role==='admin' ? html`
-                    <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
-                      <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 md:col-span-5 flex flex-col items-center">
-                        <h4 class="font-bold text-sm text-[#0B2B26] dark:text-stone-100 mb-3 flex items-center">
-                          <i class="fa-solid fa-moon text-emerald-600 mr-2"></i> Kalender Hijriyah
-                        </h4>
-                        <div class="w-full flex items-center justify-center rounded-2xl overflow-hidden bg-slate-50 border border-stone-100">
-                          <iframe title="islamic-calendar" style=${{width:'250px',height:'312px',border:'none'}} scrolling="no" src="https://www.islamicfinder.org/islamic-calendar/widgetGregorian?type=Gregorian"></iframe>
-                        </div>
-                      </div>
-                      <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 md:col-span-7">
-                        <h4 class="font-bold text-sm text-[#0B2B26] dark:text-stone-100 flex items-center mb-4">
-                          <i class="fa-solid fa-calendar-days text-emerald-600 mr-2"></i> Klik Tanggal untuk Tambah Tugas
-                        </h4>
-                        <div class="grid grid-cols-7 gap-1 text-center font-bold text-[11px] mb-2 text-stone-400">
-                          ${['Min','Sen','Sel','Rab','Kam','Jum','Sab'].map(d=>html`<span key=${d}>${d}</span>`)}
-                        </div>
-                        <div class="grid grid-cols-7 gap-1">
-                          ${Array.from({length:31},(_,i)=>{
-                            const dn = i+1;
-                            const ds = `2026-06-${dn.toString().padStart(2,'0')}`;
-                            const dt = todos.filter(t=>formatToInputDate(t.startDate)<=ds && formatToInputDate(t.endDate)>=ds);
-                            return html`
-                              <button key=${dn} onClick=${()=>handleDateClick(ds)} class="aspect-square flex flex-col justify-between items-center p-1 bg-stone-50 hover:bg-emerald-50 dark:bg-stone-800/40 dark:hover:bg-stone-800 rounded-xl relative border border-stone-100 dark:border-stone-800 transition-all hover:scale-[1.05]">
-                                <span class="text-xs font-bold self-start text-stone-600 dark:text-stone-300">${dn}</span>
-                                ${dt.length>0 && html`<span class="w-2 h-2 rounded-full bg-emerald-500 absolute bottom-1 right-1"></span>`}
-                              </button>
-                            `;
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  ` : html`
-                    <div class="bg-white dark:bg-stone-900 p-8 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 flex flex-col items-center justify-center max-w-md mx-auto">
-                      <h4 class="font-bold text-base text-[#0B2B26] dark:text-stone-100 mb-4 flex items-center">
-                        <i class="fa-solid fa-moon text-emerald-600 mr-2 animate-pulse"></i> Kalender Hijriyah Hari Ini
-                      </h4>
-                      <div class="w-full flex items-center justify-center rounded-2xl overflow-hidden bg-slate-50 dark:bg-stone-800 border border-stone-100 dark:border-stone-800 p-4">
-                        <iframe title="islamic-calendar-user" style=${{width:'250px',height:'312px',border:'none'}} scrolling="no" src="https://www.islamicfinder.org/islamic-calendar/widgetGregorian?type=Gregorian"></iframe>
-                      </div>
-                    </div>
-                  `}
-                </div>
-              `}
+    // ── MODAL ADD/EDIT INFO ──
+    infoModal && e('div',{className:'fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm'},
+      e('div',{className:'w-full max-w-md bg-white dark:bg-stone-900 rounded-3xl shadow-2xl border border-stone-100 dark:border-stone-800 overflow-hidden p-6 relative'},
+        e('button',{onClick:function(){ setInfoModal(false); setInfoForm({id:'',title:'',content:''}); setEditingInfo(false); },className:'absolute top-4 right-4 text-stone-400 hover:text-stone-600'},e('i',{className:'fa-solid fa-circle-xmark text-xl'})),
+        e('h3',{className:'text-base font-bold text-[#0B2B26] dark:text-stone-100 mb-4 flex items-center'},e('i',{className:'fa-solid fa-bullhorn text-emerald-600 mr-2'}),editingInfo?'Revisi Pengumuman':'Tambah Informasi Baru'),
+        e('form',{onSubmit:handleSaveInfo,className:'space-y-4 text-xs text-left'},
+          e('div',null,
+            e('label',{className:'block text-[10px] font-bold uppercase text-stone-400 mb-1'},'Judul (Max 50 Karakter)'),
+            e('input',{type:'text',required:true,maxLength:50,className:'w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-800 dark:text-stone-100',placeholder:'Contoh: Pengumuman Rapat Wali Murid',value:infoForm.title,onChange:function(ev){ setInfoForm(function(f){ return Object.assign({},f,{title:ev.target.value}); }); }}),
+            e('span',{className:'text-[9px] text-stone-400 block mt-0.5 text-right'},infoForm.title.length+'/50 karakter')
+          ),
+          e('div',null,
+            e('label',{className:'block text-[10px] font-bold uppercase text-stone-400 mb-1'},'Isi Informasi (Max 500 Karakter)'),
+            e('textarea',{required:true,maxLength:500,rows:5,className:'w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-800 dark:text-stone-100',placeholder:'Isi informasi lengkap di sini...',value:infoForm.content,onChange:function(ev){ setInfoForm(function(f){ return Object.assign({},f,{content:ev.target.value}); }); }}),
+            e('span',{className:'text-[9px] text-stone-400 block mt-0.5 text-right'},infoForm.content.length+'/500 karakter')
+          ),
+          e('button',{type:'submit',className:'w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-[#235E52] text-white font-bold transition-all shadow-lg'},e('i',{className:'fa-solid fa-paper-plane mr-1'}),editingInfo?' Simpan Revisi':' Publikasikan Informasi')
+        )
+      )
+    ),
 
-              <!-- QURAN TAB -->
-              ${currentTab==='quran' && html`
-                <div class="space-y-4">
-                  ${!selectedSurah ? html`
-                    <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
-                      <div class="mb-4">
-                        <h4 class="font-bold text-sm text-[#0B2B26] dark:text-stone-100 flex items-center mb-2">
-                          <i class="fa-solid fa-book-open text-emerald-600 mr-2"></i> Portal Al-Quran & Terjemah
-                        </h4>
-                        <div class="relative">
-                          <input type="text" class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500" placeholder="Cari surat (Contoh: Al-Fatihah, Ya-Sin)..."
-                            value=${quranSearch} onInput=${e=>setQuranSearch(e.target.value)} />
-                          <i class="fa-solid fa-search text-stone-400 absolute left-3.5 top-3.5 text-xs"></i>
-                        </div>
-                      </div>
-                      ${loadingQuran ? html`
-                        <div class="text-center py-10"><i class="fa-solid fa-spinner animate-spin text-emerald-600 text-2xl"></i><p class="text-xs text-stone-400 mt-2">Memuat data Al-Quran...</p></div>
-                      ` : html`
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto no-scrollbar">
-                          ${quranSurahs.filter(s=>s.englishName.toLowerCase().includes(quranSearch.toLowerCase())||s.name.includes(quranSearch)).map(surah=>html`
-                            <button key=${surah.number} onClick=${()=>viewSurahDetails(surah.number,selectedQari)} class="p-3.5 rounded-2xl bg-stone-50/50 hover:bg-emerald-50/40 border border-stone-100 dark:bg-stone-800/25 dark:border-stone-800/40 text-left transition-all hover:scale-[1.01] flex items-center justify-between">
-                              <div class="flex items-center space-x-3">
-                                <span class="bg-emerald-600/10 text-emerald-600 font-bold w-7 h-7 flex items-center justify-center rounded-xl text-xs">${surah.number}</span>
-                                <div>
-                                  <div class="font-bold text-xs">${surah.englishName}</div>
-                                  <div class="text-[10px] text-stone-400 uppercase tracking-widest">${surah.englishNameTranslation} (${surah.numberOfAyahs} Ayat)</div>
-                                </div>
-                              </div>
-                              <div class="arabic-text text-lg text-emerald-700 font-bold">${surah.name}</div>
-                            </button>
-                          `)}
-                        </div>
-                      `}
-                    </div>
-                  ` : html`
-                    <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
-                      <div class="flex flex-col space-y-4 pb-3 border-b border-stone-100 dark:border-stone-800 mb-4">
-                        <div class="flex items-center justify-between flex-wrap gap-2">
-                          <button onClick=${()=>{setSelectedSurah(null);setSurahDetails(null);isPlayingFullSurahRef.current=false;isPlayingRangeRef.current=false;setIsPlayingFullSurah(false);setIsPlayingRange(false);setStartAyah('');setEndAyah('');if(audioRef.current)audioRef.current.pause();}} class="text-xs text-emerald-600 font-bold flex items-center hover:underline">
-                            <i class="fa-solid fa-arrow-left mr-1"></i> Kembali ke Daftar
-                          </button>
-                          ${surahDetails && html`
-                            <div class="text-right">
-                              <h4 class="font-bold text-xs text-slate-800 dark:text-stone-100">${surahDetails.info.englishName}</h4>
-                              <p class="text-[10px] text-stone-400 font-semibold">${surahDetails.info.numberOfAyahs} Ayat</p>
-                            </div>
-                          `}
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 bg-stone-50 dark:bg-stone-800/40 p-4 rounded-2xl border border-stone-100 dark:border-stone-800">
-                          <div class="flex flex-col">
-                            <label class="text-[9px] font-bold text-stone-400 uppercase tracking-wider mb-1"><i class="fa-solid fa-microphone mr-1 text-emerald-600"></i> Pilihan Qari / Reciter</label>
-                            <select value=${selectedQari} onChange=${e=>{setSelectedQari(e.target.value);viewSurahDetails(selectedSurah,e.target.value);}} class="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs rounded-xl px-2.5 py-1.5 font-bold text-slate-800 dark:text-stone-200 focus:outline-none">
-                              ${QARI_LIST.map(q=>html`<option key=${q.id} value=${q.id}>${q.name}</option>`)}
-                            </select>
-                          </div>
-                          <div class="flex flex-col space-y-1.5">
-                            <label class="text-[9px] font-bold text-stone-400 uppercase tracking-wider"><i
+    // ── MODAL KETERANGAN ──
+    ketModal.isOpen && ketModal.todo && e('div',{className:'fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm'},
+      e('div',{className:'w-full max-w-md bg-white dark:bg-stone-900 rounded-3xl shadow-2xl border border-stone-100 dark:border-stone-800 overflow-hidden p-6 relative'},
+        e('button',{onClick:function(){ setKetModal({isOpen:false,todo:null,text:''}); },className:'absolute top-4 right-4 text-stone-400 hover:text-stone-600'},e('i',{className:'fa-solid fa-circle-xmark text-xl'})),
+        e('h3',{className:'text-base font-bold text-[#0B2B26] dark:text-stone-100 mb-4 flex items-center'},e('i',{className:'fa-solid fa-file-signature text-emerald-600 mr-2'}),' Detail & Keterangan Aktifitas'),
+        e('div',{className:'mb-4 p-3 bg-stone-50 dark:bg-stone-800 rounded-xl border border-stone-100 dark:border-stone-700'},
+          e('div',{className:'font-bold text-sm text-stone-800 dark:text-stone-100'},ketModal.todo.task),
+          e('div',{className:'text-xs text-stone-500 mt-1'},ketModal.todo.subActivity)
+        ),
+        currentUser && currentUser.role==='admin'
+          ? e('form',{onSubmit:submitKet,className:'space-y-4 text-xs text-left'},
+              e('div',null,
+                e('label',{className:'block text-[10px] font-bold uppercase text-stone-400 mb-1'},'Keterangan (Max 100 Karakter)'),
+                e('textarea',{required:true,maxLength:100,rows:3,className:'w-full px-3 py-2 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-800 dark:text-stone-100',placeholder:'Masukkan keterangan pencapaian...',value:ketModal.text,onChange:function(ev){ setKetModal(function(k){ return Object.assign({},k,{text:ev.target.value}); }); }}),
+                e('span',{className:'text-[9px] text-stone-400 block mt-0.5 text-right'},ketModal.text.length+'/100 karakter')
+              ),
+              e('button',{type:'submit',className:'w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-[#235E52] text-white font-bold transition-all shadow-lg'},e('i',{className:'fa-solid fa-save mr-1'}),' Simpan Keterangan')
+            )
+          : e('div',{className:'space-y-2 text-xs'},
+              e('label',{className:'block text-[10px] font-bold uppercase text-stone-400'},'Keterangan Pencapaian:'),
+              e('div',{className:'p-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-200 border border-emerald-100 dark:border-emerald-800/50 italic'},
+                ketModal.todo.keterangan || 'Belum ada keterangan pencapaian kerja.'
+              )
+            )
+      )
+    ),
+
+    e('footer',{className:'fixed bottom-0 left-0 right-0 py-2.5 bg-[#0B2B26] text-slate-300 text-center text-[10px] tracking-widest font-semibold border-t border-emerald-950/40 z-20 shadow-lg'},'CREATED BY RAFLIANO')
+  );
+}
+
+// ─── MOUNT ────────────────────────────────────────────────────────
+var rootEl = document.getElementById('root');
+var root   = ReactDOM.createRoot(rootEl);
+root.render(React.createElement(App));
+hideLoading();
+
+</script>
+</body>
+</html>
