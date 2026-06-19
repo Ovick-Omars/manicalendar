@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>manicalendar - Manajemen Aktifitas Madrasah</title>
-  
-  <!-- Tailwind CSS CDN -->
+
+  <!-- ✅ FIX #1: Tailwind via CDN Play (aman untuk GitHub Pages) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -13,19 +13,6 @@
       theme: {
         extend: {
           colors: {
-            emerald: {
-              50: '#f0fdf4',
-              100: '#dcfce7',
-              200: '#bbf7d0',
-              300: '#86efac',
-              400: '#4ade80',
-              500: '#22c55e',
-              600: '#16a34a',
-              700: '#15803d',
-              800: '#166534',
-              900: '#14532d',
-              950: '#052e16',
-            },
             islamic: {
               gold: '#D4AF37',
               dark: '#0B2B26',
@@ -42,1171 +29,908 @@
     }
   </script>
 
-  <!-- Google Fonts & FontAwesome Icons -->
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-  <!-- React 18, ReactDOM & Babel Standalone CDN -->
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- ✅ FIX #2: React via ESM dari esm.sh — TIDAK butuh Babel, TIDAK kena blokir CSP -->
+  <script type="importmap">
+  {
+    "imports": {
+      "react": "https://esm.sh/react@18",
+      "react-dom/client": "https://esm.sh/react-dom@18/client",
+      "htm/react": "https://esm.sh/htm@3/react"
+    }
+  }
+  </script>
+
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0B2B26">
 
   <style>
-    body {
-      font-family: 'Plus Jakarta Sans', sans-serif;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .no-scrollbar::-webkit-scrollbar {
-      display: none;
-    }
-    .arabic-text {
-      font-family: 'Amiri', serif;
-    }
-    /* Animasi gelombang audio saat diputar */
-    .bar {
-      width: 3px;
-      height: 8px;
-      background-color: #D4AF37;
-      display: inline-block;
-      margin: 0 1px;
-      border-radius: 1px;
-    }
-    .playing .bar {
-      animation: bounce 0.8s ease-in-out infinite alternate;
-    }
-    .playing .bar:nth-child(2) { animation-delay: 0.15s; }
-    .playing .bar:nth-child(3) { animation-delay: 0.3s; }
-    .playing .bar:nth-child(4) { animation-delay: 0.1s; }
-    @keyframes bounce {
-      0% { height: 4px; }
-      100% { height: 18px; }
-    }
+    body { font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
+    .arabic-text { font-family: 'Amiri', serif; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .glass-card { background: rgba(255,255,255,0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.4); }
+    .dark .glass-card { background: rgba(11,43,38,0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.05); }
+    .sholat-card { background: linear-gradient(135deg, #0B2B26 0%, #1c4d44 100%); }
+    /* Loading screen */
+    #app-loading { position:fixed; inset:0; background:#0B2B26; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:9999; }
+    #app-loading .loader { width:48px; height:48px; border:4px solid rgba(212,175,55,0.3); border-top-color:#D4AF37; border-radius:50%; animation:spin 0.8s linear infinite; margin-bottom:16px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #root.ready #app-loading { display:none; }
   </style>
 </head>
-<body class="bg-[#F4F7F6] text-slate-800 dark:bg-stone-950 dark:text-stone-100 min-h-screen transition-colors duration-300">
-  <div id="root"></div>
+<body class="bg-[#F4F7F6] text-slate-800 dark:bg-stone-950 dark:text-stone-100 min-h-screen flex flex-col transition-colors duration-300 pb-20">
 
-  <script type="text/babel" data-presets="react">
-    const { useState, useEffect, useRef } = React;
+  <!-- Loading screen saat module JS dimuat -->
+  <div id="app-loading">
+    <div class="loader"></div>
+    <p style="color:#D4AF37;font-size:13px;font-weight:700;letter-spacing:2px;">MEMUAT APLIKASI...</p>
+  </div>
 
-    const QURAN_SURAHS = [
-      { id: 1, name: "Al-Fatihah", arabic: "الفاتحة", totalAyahs: 7 },
-      { id: 2, name: "Al-Baqarah", arabic: "البقرة", totalAyahs: 286 },
-      { id: 3, name: "Ali 'Imran", arabic: "آل عمران", totalAyahs: 200 },
-      { id: 36, name: "Yasin", arabic: "يس", totalAyahs: 83 },
-      { id: 55, name: "Ar-Rahman", arabic: "الرحمن", totalAyahs: 78 },
-      { id: 56, name: "Al-Waqi'ah", arabic: "الواقعة", totalAyahs: 96 },
-      { id: 67, name: "Al-Mulk", arabic: "الملک", totalAyahs: 30 },
-      { id: 112, name: "Al-Ikhlas", arabic: "الإخلاص", totalAyahs: 4 },
-      { id: 113, name: "Al-Falaq", arabic: "الفلق", totalAyahs: 5 },
-      { id: 114, name: "An-Nas", arabic: "الناس", totalAyahs: 6 }
+  <div id="root" class="flex-grow flex flex-col"></div>
+
+  <!-- ✅ FIX #3: Gunakan type="module" — tidak perlu Babel, berjalan native di semua browser modern -->
+  <script type="module">
+    import { useState, useEffect, useRef, useCallback } from 'react';
+    import { createRoot } from 'react-dom/client';
+    // htm = JSX-like template literals, tidak perlu Babel build step
+    import { html } from 'htm/react';
+
+    // Sembunyikan loading screen
+    document.getElementById('app-loading').style.display = 'none';
+
+    // ─── KONSTANTA ───────────────────────────────────────────────
+    const DEFAULT_GAS_URL = ''; // ✅ FIX #4: Dikosongkan — user wajib isi URL GAS-nya sendiri via Settings
+
+    const FALLBACK_TODOS = [
+      { id: '1', task: 'Ujian Tengah Semester Ganjil', subActivity: 'Persiapan lembar soal & pengawas madrasah', pic: 'admin', startDate: '2026-06-01', endDate: '2026-06-05', progress: 50, createdBy: 'admin', keterangan: 'Soal sedang dicetak.' },
+      { id: '2', task: 'Rapat Kerja Tahunan Madrasah', subActivity: 'Penyusunan anggaran belanja sekolah', pic: 'rafliano', startDate: '2026-06-10', endDate: '2026-06-12', progress: 100, createdBy: 'admin', keterangan: 'Rapat berjalan lancar.' },
+      { id: '3', task: 'Penerimaan Santri Baru (PSB)', subActivity: 'Seleksi berkas & wawancara online', pic: 'rafliano', startDate: '2026-06-15', endDate: '2026-06-20', progress: 20, createdBy: 'admin', keterangan: '' }
     ];
-
+    const FALLBACK_INFOS = [
+      { id: '1', title: 'Persiapan Ujian Semester', content: 'Diharapkan seluruh asatidzah mempersiapkan naskah soal ujian paling lambat akhir minggu ini.', timestamp: '2026-06-01T09:15:00.000Z', createdBy: 'rafliano' },
+      { id: '2', title: 'Kebersihan Lingkungan Madrasah', content: 'Kerja bakti rutin hari Jumat akan difokuskan pada area halaman depan dan ruang kelas baru.', timestamp: '2026-06-01T10:30:00.000Z', createdBy: 'admin' }
+    ];
     const QARI_LIST = [
-      { id: "Alafasy_128kbps", name: "Mishary Rashid Alafasy", desc: "Suara jernih dan berirama tenang" },
-      { id: "Ghamadi_40kbps", name: "Saad Al-Ghamdi", desc: "Tajwid tartil tegas dan jelas" },
-      { id: "Abdul_Basit_Murattal_64kbps", name: "Abdul Basit", desc: "Klasik, murattal penuh penjiwaan" }
+      { name: 'Misyari Al-Afasy', id: 'ar.alafasy' },
+      { name: 'Abdurrahman As-Sudais', id: 'ar.abdurrahmaansudais' },
+      { name: 'Maher Al-Muaiqly', id: 'ar.mahermuaiqly' },
+      { name: 'Ali Al-Hudhaify', id: 'ar.hudhaify' },
+      { name: 'Mahmoud Khalil Al-Husary', id: 'ar.husary' },
+      { name: 'Saad Al-Ghamdi', id: 'ar.saadalgamdi' },
+      { name: 'Abdul Basit Abdul Samad', id: 'ar.abdulbasitmurattal' },
+      { name: 'Mohamed Siddiq El-Minshawi', id: 'ar.minshawi' }
+    ];
+    const SHOLAT_TIMES = [
+      { name: 'Subuh', time: '04:36', icon: 'fa-cloud-sun' },
+      { name: 'Dzuhur', time: '11:53', icon: 'fa-sun' },
+      { name: 'Ashar', time: '15:14', icon: 'fa-cloud' },
+      { name: 'Maghrib', time: '17:48', icon: 'fa-moon' },
+      { name: 'Isya', time: '19:01', icon: 'fa-star-and-crescent' }
     ];
 
+    // ─── UTILITY FUNCTIONS ────────────────────────────────────────
+    const parseLocalDate = (dateStr) => {
+      if (!dateStr) return null;
+      try {
+        const s = dateStr.toString().trim();
+        if (s.includes('T')) {
+          const [y, m, d] = s.split('T')[0].split('-').map(Number);
+          return new Date(y, m - 1, d);
+        }
+        const parts = s.split(/[-/]/);
+        if (parts.length === 3) {
+          if (parts[0].length === 4) return new Date(+parts[0], +parts[1]-1, +parts[2]);
+          if (parts[2].length === 4) return new Date(+parts[2], +parts[1]-1, +parts[0]);
+        }
+        const d = new Date(s);
+        if (!isNaN(d.getTime())) return d;
+      } catch(e) {}
+      return null;
+    };
+    const formatDateStr = (dateStr) => {
+      if (!dateStr) return '';
+      const d = parseLocalDate(dateStr);
+      if (!d) return dateStr;
+      return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;
+    };
+    const formatToInputDate = (dateStr) => {
+      if (!dateStr) return '';
+      const d = parseLocalDate(dateStr);
+      if (!d) return dateStr;
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    };
+    const formatTimestamp = (ts) => {
+      if (!ts) return '';
+      const d = new Date(ts.toString().trim());
+      if (isNaN(d.getTime())) return ts;
+      return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    };
+    const getHijriDate = () => {
+      return new Intl.DateTimeFormat('id-ID-u-ca-islamic-umalqura', { calendar:'islamic-umalqura', day:'numeric', month:'long', year:'numeric' }).format(new Date());
+    };
+    const todayInputDate = () => new Date().toISOString().split('T')[0];
+    const ls = {
+      get: (k, fallback=null) => { try { const v=localStorage.getItem(k); return v ? JSON.parse(v) : fallback; } catch(e){ return fallback; }},
+      set: (k,v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} },
+      str: (k,fallback='') => localStorage.getItem(k) || fallback,
+      setStr: (k,v) => localStorage.setItem(k,v),
+      remove: (k) => localStorage.removeItem(k)
+    };
+
+    // ─── KOMPONEN UTAMA APP ────────────────────────────────────────
     function App() {
-      // Autentikasi & Pengguna
-      const [currentUser, setCurrentUser] = useState(() => {
-        const saved = localStorage.getItem("curUser");
-        return saved ? JSON.parse(saved) : null;
-      });
+      const [apiUrl, setApiUrl]           = useState(() => ls.str('gas_api_url', DEFAULT_GAS_URL));
+      const [apiConnected, setApiConnected] = useState(false);
+      const [currentUser, setCurrentUser]   = useState(() => ls.get('active_user', null));
+      const [currentTab, setCurrentTab]     = useState('home');
+      const [theme, setTheme]               = useState(() => ls.str('theme', 'light'));
+      const [users, setUsers]               = useState([]);
+      const [todos, setTodos]               = useState([]);
+      const [infos, setInfos]               = useState([]);
+      const [syncing, setSyncing]           = useState(false);
+      const [currentPage, setCurrentPage]   = useState(1);
+      const rowsPerPage = 10;
+      const [toast, setToast]               = useState({ show:false, message:'', type:'success' });
+      const [confirmModal, setConfirmModal] = useState({ isOpen:false, message:'', action:null });
+      const [isUrlModalOpen, setIsUrlModalOpen] = useState(false);
+      const [customUrlInput, setCustomUrlInput] = useState('');
+      const [showPassword, setShowPassword]   = useState(false);
+      const [showRegPassword, setShowRegPassword] = useState(false);
+      const [isRegisterMode, setIsRegisterMode] = useState(false);
+      const [regForm, setRegForm]             = useState({ username:'', email:'', password:'' });
+      const [loginForm, setLoginForm]         = useState({ username:'', password:'' });
+      const [authError, setAuthError]         = useState('');
+      const [authSuccess, setAuthSuccess]     = useState('');
+      const [isModalOpen, setIsModalOpen]     = useState(false);
+      const [activityForm, setActivityForm]   = useState({ id:'', task:'', subActivity:'', pic:'', startDate:'', endDate:'', progress:0, keterangan:'', createdBy:'' });
+      const [isEditing, setIsEditing]         = useState(false);
+      const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+      const [isEditingInfo, setIsEditingInfo]   = useState(false);
+      const [infoForm, setInfoForm]             = useState({ id:'', title:'', content:'' });
+      const [keteranganModal, setKeteranganModal] = useState({ isOpen:false, todo:null, text:'' });
+      const [quranSurahs, setQuranSurahs]       = useState([]);
+      const [selectedSurah, setSelectedSurah]   = useState(null);
+      const [surahDetails, setSurahDetails]     = useState(null);
+      const [loadingQuran, setLoadingQuran]     = useState(false);
+      const [playingAudio, setPlayingAudio]     = useState(null);
+      const [quranSearch, setQuranSearch]       = useState('');
+      const [isPlayingFullSurah, setIsPlayingFullSurah] = useState(false);
+      const [currentFullSurahIndex, setCurrentFullSurahIndex] = useState(0);
+      const [quranPlayMode, setQuranPlayMode]   = useState('full');
+      const [startAyah, setStartAyah]           = useState('');
+      const [endAyah, setEndAyah]               = useState('');
+      const [isPlayingRange, setIsPlayingRange] = useState(false);
+      const [selectedQari, setSelectedQari]     = useState('ar.alafasy');
+      const isPlayingFullSurahRef = useRef(false);
+      const isPlayingRangeRef     = useRef(false);
+      const audioRef              = useRef(null);
 
-      const [users, setUsers] = useState(() => {
-        const saved = localStorage.getItem("regUsers");
-        if (saved) return JSON.parse(saved);
-        const defaultUsers = [
-          { id: "u1", username: "admin", password: "123", role: "admin", fullName: "Ustadz Pembina Utama" },
-          { id: "u2", username: "santri", password: "123", role: "santri", fullName: "Ahmad Santri" }
-        ];
-        localStorage.setItem("regUsers", JSON.stringify(defaultUsers));
-        return defaultUsers;
-      });
+      // ── Theme ──
+      useEffect(() => {
+        document.documentElement.classList.toggle('dark', theme === 'dark');
+        ls.setStr('theme', theme);
+      }, [theme]);
 
-      const [activeTab, setActiveTab] = useState("beranda");
-      const [loginUser, setLoginUser] = useState("");
-      const [loginPass, setLoginPass] = useState("");
-      const [showLoginPass, setShowLoginPass] = useState(false);
-      
-      const [regUser, setRegUser] = useState("");
-      const [regPass, setRegPass] = useState("");
-      const [regFullName, setRegFullName] = useState("");
-      const [regRole, setRegRole] = useState("santri");
-      const [showRegPass, setShowRegPass] = useState(false);
-      const [isRegOpen, setIsRegOpen] = useState(false);
+      // ── Toast ──
+      const showToast = useCallback((message, type='success') => {
+        setToast({ show:true, message, type });
+        setTimeout(() => setToast(p => ({ ...p, show:false })), 4000);
+      }, []);
 
-      const [authMsg, setAuthMsg] = useState({ text: "", type: "" });
+      const askConfirmation = (message, action) =>
+        setConfirmModal({ isOpen:true, message, action: () => { action(); setConfirmModal({ isOpen:false, message:'', action:null }); }});
 
-      // State Aktifitas (Rencana Kerja Madrasah)
-      const [kegiatan, setKegiatan] = useState(() => {
-        const saved = localStorage.getItem("kegiatanList");
-        return saved ? JSON.parse(saved) : [
-          { id: "k1", title: "Ujian Tahfidz Semester Ganjil", start: "2026-06-20", end: "2026-06-25", pic: "u1", desc: "Evaluasi hafalan 5 juz terakhir.", status: "Belum Selesai" }
-        ];
-      });
-
-      // State Pengumuman / Informasi
-      const [announcements, setAnnouncements] = useState(() => {
-        const saved = localStorage.getItem("annList");
-        return saved ? JSON.parse(saved) : [
-          { id: "a1", title: "Pengumuman Libur Semester", content: "Mulai tanggal 1 Juli, madrasah diliburkan untuk persiapan tahun ajaran baru.", date: "2026-06-15T12:00:00.000Z", image: null }
-        ];
-      });
-
-      // API URL untuk Google Sheets
-      const [apiUrl, setApiUrl] = useState(() => {
-        return localStorage.getItem("gas_api_url") || "";
-      });
-      const [syncStatus, setSyncStatus] = useState("Belum Sinkron");
-
-      // Form Modals Rencana Kerja
-      const [isKegModalOpen, setIsKegModalOpen] = useState(false);
-      const [kegFormType, setKegFormType] = useState("add"); // 'add' | 'edit'
-      const [editingKegId, setEditingKegId] = useState(null);
-      const [kegTitle, setKegTitle] = useState("");
-      const [kegStart, setKegStart] = useState("");
-      const [kegEnd, setKegEnd] = useState("");
-      const [kegPic, setKegPic] = useState("");
-      const [kegDesc, setKegDesc] = useState("");
-      const [kegStatus, setKegStatus] = useState("Belum Selesai");
-
-      // Form Modals Informasi
-      const [isAnnModalOpen, setIsAnnModalOpen] = useState(false);
-      const [annFormType, setAnnFormType] = useState("add"); // 'add' | 'edit'
-      const [editingAnnId, setEditingAnnId] = useState(null);
-      const [annTitle, setAnnTitle] = useState("");
-      const [annContent, setAnnContent] = useState("");
-      const [annImage, setAnnImage] = useState(null); // base64 string
-
-      // State Al-Quran Audio Player
-      const [selSurahId, setSelSurahId] = useState(1);
-      const [selQari, setSelQari] = useState("Alafasy_128kbps");
-      const [playMode, setPlayMode] = useState("full"); // 'full' | 'range'
-      const [startAyah, setStartAyah] = useState(1);
-      const [endAyah, setEndAyah] = useState(7);
-      const [curAyah, setCurAyah] = useState(1);
-      const [isPlaying, setIsPlaying] = useState(false);
-      const [isLoadingAudio, setIsLoadingAudio] = useState(false);
-      const [audioError, setAudioError] = useState("");
-
-      const audioRef = useRef(new Audio());
-      const stateRef = useRef({ isPlaying: false, curAyah: 1, startAyah: 1, endAyah: 7, playMode: 'full', selSurahId: 1, selQari: 'Alafasy_128kbps' });
-
-      // Sinkronisasi local storage
-      useEffect(() => { localStorage.setItem("kegiatanList", JSON.stringify(kegiatan)); }, [kegiatan]);
-      useEffect(() => { localStorage.setItem("annList", JSON.stringify(announcements)); }, [announcements]);
-      useEffect(() => { localStorage.setItem("regUsers", JSON.stringify(users)); }, [users]);
-      useEffect(() => { localStorage.setItem("gas_api_url", apiUrl); }, [apiUrl]);
-
-      // FUNGSI UTAMA PENANGANAN TANGGAL: Anti-Mundur 1 Hari
-      const parseLocalDate = (dateStr) => {
-        if (!dateStr) return null;
-        const cleanStr = dateStr.toString().trim();
-        if (/^\d{4}-\d{2}-\d{2}$/.test(cleanStr)) {
-          const [y, m, d] = cleanStr.split('-').map(Number);
-          return new Date(y, m - 1, d); // Menggunakan tanggal lokal presisi tinggi
+      // ── Cloud Sync ──
+      const syncWithCloud = useCallback(async (urlToUse) => {
+        const url = urlToUse !== undefined ? urlToUse : apiUrl;
+        if (!url) {
+          setTodos(ls.get('local_todos', FALLBACK_TODOS));
+          setInfos(ls.get('local_infos', FALLBACK_INFOS));
+          const lu = ls.get('local_users', null);
+          if (lu) setUsers(lu);
+          setApiConnected(false);
+          return;
         }
-        return new Date(cleanStr);
-      };
+        setSyncing(true);
+        try {
+          // ✅ FIX #5: Tambah no-cors fallback dan timeout untuk handle GAS lambat
+          const controller = new AbortController();
+          const tid = setTimeout(() => controller.abort(), 10000);
+          const [tRes, iRes, uRes] = await Promise.all([
+            fetch(`${url}?action=getTodos`, { signal: controller.signal }),
+            fetch(`${url}?action=getInfos`, { signal: controller.signal }),
+            fetch(`${url}?action=getUsers`, { signal: controller.signal }),
+          ]);
+          clearTimeout(tid);
+          const [tData, iData, uData] = await Promise.all([tRes.json(), iRes.json(), uRes.json()]);
+          if (tData.status === 'success') { setTodos(tData.data); ls.set('local_todos', tData.data); setApiConnected(true); }
+          if (iData.status === 'success') { setInfos(iData.data); ls.set('local_infos', iData.data); }
+          if (uData.status === 'success') { setUsers(uData.data); ls.set('local_users', uData.data); }
+        } catch(err) {
+          console.warn('Sync gagal, pakai cache lokal:', err.message);
+          setTodos(ls.get('local_todos', FALLBACK_TODOS));
+          setInfos(ls.get('local_infos', FALLBACK_INFOS));
+          const lu = ls.get('local_users', null);
+          if (lu) setUsers(lu);
+          setApiConnected(false);
+        } finally { setSyncing(false); }
+      }, [apiUrl]);
 
-      const formatDateDisplay = (dateStr) => {
-        if (!dateStr) return "-";
-        const d = parseLocalDate(dateStr);
-        if (!d || isNaN(d.getTime())) return dateStr;
-        const day = String(d.getDate()).padStart(2, '0');
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const year = d.getFullYear();
-        return `${day}-${month}-${year}`;
-      };
-
-      const formatToInputDate = (dateStr) => {
-        if (!dateStr) return "";
-        const d = parseLocalDate(dateStr);
-        if (!d || isNaN(d.getTime())) return dateStr;
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-      };
-
-      // Sinkronisasi Audio State
       useEffect(() => {
-        const curSurah = QURAN_SURAHS.find(s => s.id === selSurahId) || QURAN_SURAHS[0];
-        stateRef.current = { isPlaying, curAyah, startAyah, endAyah, playMode, selSurahId, selQari, totalAyahs: curSurah.totalAyahs };
-      }, [isPlaying, curAyah, startAyah, endAyah, playMode, selSurahId, selQari]);
+        if (apiUrl) ls.setStr('gas_api_url', apiUrl);
+        syncWithCloud(apiUrl);
+        loadQuranSurahs();
+      }, [apiUrl]);
 
-      // Menyetel Audio Source & Memutar Ayat
-      const playSelectedAyah = (surahNum, ayahNum) => {
-        setIsLoadingAudio(true);
-        setAudioError("");
-        audioRef.current.pause();
-
-        const pad = (num) => String(num).padStart(3, '0');
-        const reciter = stateRef.current.selQari;
-        const url = `https://everyayah.com/data/${reciter}/${pad(surahNum)}${pad(ayahNum)}.mp3`;
-
-        audioRef.current.src = url;
-        audioRef.current.load();
-
-        audioRef.current.play()
-          .then(() => setIsLoadingAudio(false))
-          .catch((err) => {
-            console.error(err);
-            setIsLoadingAudio(false);
-            setAudioError(`Audio ayat ${ayahNum} gagal dimuat.`);
-            if (stateRef.current.isPlaying) {
-              setTimeout(() => handleNextAyah(), 2500);
-            }
-          });
+      // ── Quran ──
+      const loadQuranSurahs = async () => {
+        setLoadingQuran(true);
+        try {
+          const res = await fetch('https://api.alquran.cloud/v1/surah');
+          const data = await res.json();
+          if (data.code === 200) setQuranSurahs(data.data);
+        } catch(e) { showToast('Gagal memuat daftar Al-Quran', 'error'); }
+        finally { setLoadingQuran(false); }
       };
 
-      // Efek Pengulangan Otomatis Saat Audio Selesai
-      useEffect(() => {
-        const audioObj = audioRef.current;
-        const handleEnded = () => {
-          const { isPlaying, playMode, selSurahId, curAyah, startAyah, endAyah, totalAyahs } = stateRef.current;
-          if (!isPlaying) return;
-
-          if (playMode === 'full') {
-            if (curAyah < totalAyahs) {
-              const next = curAyah + 1;
-              setCurAyah(next);
-              playSelectedAyah(selSurahId, next);
-            } else {
-              setCurAyah(1);
-              playSelectedAyah(selSurahId, 1); // Infinite Repeat Loop Full Surat
-            }
-          } else {
-            if (curAyah < endAyah) {
-              const next = curAyah + 1;
-              setCurAyah(next);
-              playSelectedAyah(selSurahId, next);
-            } else {
-              setCurAyah(startAyah);
-              playSelectedAyah(selSurahId, startAyah); // Infinite Repeat Loop Rentang Ayat
-            }
+      const viewSurahDetails = async (surahNumber, qariId = selectedQari) => {
+        setLoadingQuran(true);
+        isPlayingFullSurahRef.current = false; isPlayingRangeRef.current = false;
+        setIsPlayingFullSurah(false); setIsPlayingRange(false);
+        setStartAyah(''); setEndAyah('');
+        try {
+          const res = await fetch(`https://api.alquran.cloud/v1/surah/${surahNumber}/editions/quran-uthmani,id.indonesian,${qariId}`);
+          const data = await res.json();
+          if (data.code === 200) {
+            setSurahDetails({
+              info: data.data[0],
+              verses: data.data[0].ayahs.map((a, i) => ({
+                number: a.numberInSurah,
+                text: a.text,
+                translation: data.data[1].ayahs[i].text,
+                audio: data.data[2].ayahs[i].audio
+              }))
+            });
+            setSelectedSurah(surahNumber);
           }
-        };
-
-        audioObj.addEventListener('ended', handleEnded);
-        return () => audioObj.removeEventListener('ended', handleEnded);
-      }, []);
-
-      const startPlayback = () => {
-        setIsPlaying(true);
-        const initAyah = playMode === 'range' ? startAyah : 1;
-        setCurAyah(initAyah);
-        setTimeout(() => { playSelectedAyah(selSurahId, initAyah); }, 100);
+        } catch(e) { showToast('Gagal memuat ayat Al-Quran.', 'error'); }
+        finally { setLoadingQuran(false); }
       };
 
-      const togglePlayPause = () => {
-        if (isPlaying) {
-          audioRef.current.pause();
-          setIsPlaying(false);
+      const handlePlayAudio = (audioUrl, verseId) => {
+        isPlayingFullSurahRef.current = false; isPlayingRangeRef.current = false;
+        setIsPlayingFullSurah(false); setIsPlayingRange(false);
+        if (audioRef.current) audioRef.current.pause();
+        if (playingAudio && playingAudio.id === verseId) { setPlayingAudio(null); return; }
+        audioRef.current = new Audio(audioUrl);
+        audioRef.current.play().catch(()=>{});
+        setPlayingAudio({ url: audioUrl, id: verseId });
+        audioRef.current.onended = () => setPlayingAudio(null);
+      };
+
+      const playSurahVerse = (index) => {
+        if (!isPlayingFullSurahRef.current) return;
+        if (index >= surahDetails.verses.length) { playSurahVerse(0); return; }
+        const verse = surahDetails.verses[index];
+        setCurrentFullSurahIndex(index);
+        if (audioRef.current) audioRef.current.pause();
+        audioRef.current = new Audio(verse.audio);
+        audioRef.current.play().catch(()=>{});
+        setPlayingAudio({ url: verse.audio, id: verse.number });
+        audioRef.current.onended = () => playSurahVerse(index + 1);
+      };
+
+      const handlePlayFullSurah = () => {
+        if (!surahDetails) return;
+        if (isPlayingFullSurahRef.current) {
+          if (audioRef.current) audioRef.current.pause();
+          isPlayingFullSurahRef.current = false; setIsPlayingFullSurah(false); setPlayingAudio(null);
         } else {
-          setIsPlaying(true);
-          setTimeout(() => { playSelectedAyah(selSurahId, curAyah); }, 100);
+          isPlayingFullSurahRef.current = true; isPlayingRangeRef.current = false;
+          setIsPlayingFullSurah(true); setIsPlayingRange(false);
+          playSurahVerse(0);
         }
       };
 
-      const stopPlayback = () => {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-        setIsPlaying(false);
-        setCurAyah(playMode === 'range' ? startAyah : 1);
-        setIsLoadingAudio(false);
+      const playSurahVerseRange = (currIndex, endIndex) => {
+        if (!isPlayingRangeRef.current) return;
+        const startVal = parseInt(startAyah, 10) || 1;
+        if (currIndex > endIndex || currIndex >= surahDetails.verses.length) { playSurahVerseRange(startVal - 1, endIndex); return; }
+        const verse = surahDetails.verses[currIndex];
+        setCurrentFullSurahIndex(currIndex);
+        if (audioRef.current) audioRef.current.pause();
+        audioRef.current = new Audio(verse.audio);
+        audioRef.current.play().catch(()=>{});
+        setPlayingAudio({ url: verse.audio, id: verse.number });
+        audioRef.current.onended = () => playSurahVerseRange(currIndex + 1, endIndex);
       };
 
-      const handleNextAyah = () => {
-        const { playMode, selSurahId, curAyah, startAyah, endAyah, totalAyahs } = stateRef.current;
-        if (playMode === 'full') {
-          const next = curAyah < totalAyahs ? curAyah + 1 : 1;
-          setCurAyah(next);
-          if (isPlaying) playSelectedAyah(selSurahId, next);
+      const handleQuranPlayback = () => {
+        if (!surahDetails) return;
+        if (quranPlayMode === 'full') { handlePlayFullSurah(); return; }
+        if (isPlayingRangeRef.current) {
+          if (audioRef.current) audioRef.current.pause();
+          isPlayingRangeRef.current = false; setIsPlayingRange(false); setPlayingAudio(null);
         } else {
-          const next = curAyah < endAyah ? curAyah + 1 : startAyah;
-          setCurAyah(next);
-          if (isPlaying) playSelectedAyah(selSurahId, next);
+          const sv = parseInt(startAyah, 10);
+          const ev = parseInt(endAyah, 10) || surahDetails.info.numberOfAyahs;
+          if (isNaN(sv) || sv < 1 || sv > surahDetails.info.numberOfAyahs) { showToast('Nomor ayat awal tidak valid!', 'error'); return; }
+          if (isNaN(ev) || ev < sv || ev > surahDetails.info.numberOfAyahs) { showToast('Nomor ayat akhir tidak valid!', 'error'); return; }
+          isPlayingRangeRef.current = true; isPlayingFullSurahRef.current = false;
+          setIsPlayingRange(true); setIsPlayingFullSurah(false);
+          playSurahVerseRange(sv - 1, ev - 1);
         }
       };
 
-      const handlePrevAyah = () => {
-        const { playMode, selSurahId, curAyah, startAyah, endAyah, totalAyahs } = stateRef.current;
-        if (playMode === 'full') {
-          const prev = curAyah > 1 ? curAyah - 1 : totalAyahs;
-          setCurAyah(prev);
-          if (isPlaying) playSelectedAyah(selSurahId, prev);
+      // ── Auth ──
+      const handleRegister = async (e) => {
+        e.preventDefault(); setAuthError(''); setAuthSuccess('');
+        if (regForm.password.length < 3) { setAuthError('Password minimal 3 karakter!'); return; }
+        const uL = regForm.username.toLowerCase().trim();
+        const eL = regForm.email.toLowerCase().trim();
+        if (apiUrl) {
+          setSyncing(true);
+          try {
+            const res = await fetch(apiUrl, { method:'POST', mode:'cors', headers:{'Content-Type':'text/plain'}, body:JSON.stringify({ action:'registerUser', username:uL, email:eL, password:regForm.password }) });
+            const data = await res.json();
+            if (data.status === 'success') { setAuthSuccess('Registrasi berhasil! Silakan masuk.'); setLoginForm({ username:uL, password:regForm.password }); setIsRegisterMode(false); }
+            else setAuthError(data.message || 'Registrasi gagal.');
+          } catch(err) { setAuthError('Gagal terhubung ke cloud backend.'); }
+          finally { setSyncing(false); }
         } else {
-          const prev = curAyah > startAyah ? curAyah - 1 : endAyah;
-          setCurAyah(prev);
-          if (isPlaying) playSelectedAyah(selSurahId, prev);
+          const curUsers = ls.get('local_users', []);
+          if (curUsers.some(u => u.username.toLowerCase()===uL || u.email.toLowerCase()===eL)) { setAuthError('Username atau Email sudah terdaftar!'); return; }
+          const newUser = { username:uL, email:eL, password:regForm.password, role: curUsers.length===0 ? 'admin' : 'user' };
+          const upd = [...curUsers, newUser]; ls.set('local_users', upd); setUsers(upd);
+          setAuthSuccess('Registrasi berhasil! Masuk menggunakan akun Anda.');
+          setLoginForm({ username:uL, password:regForm.password }); setIsRegisterMode(false);
         }
       };
 
-      useEffect(() => {
-        return () => { audioRef.current.pause(); };
-      }, []);
-
-      // Autentikasi Handler
-      const handleLoginSubmit = (e) => {
-        e.preventDefault();
-        const found = users.find(u => u.username.toLowerCase() === loginUser.toLowerCase() && u.password === loginPass);
-        if (found) {
-          setCurrentUser(found);
-          localStorage.setItem("curUser", JSON.stringify(found));
-          setLoginUser(""); setLoginPass("");
-          setAuthMsg({ text: "Berhasil masuk!", type: "success" });
-        } else {
-          setAuthMsg({ text: "Username atau Password salah!", type: "error" });
-        }
+      const attemptLocalLogin = (queryStr) => {
+        const curUsers = ls.get('local_users', []);
+        const m = curUsers.find(u => (u.username.toLowerCase()===queryStr || u.email.toLowerCase()===queryStr) && u.password.toString()===loginForm.password.toString());
+        if (m) { const s = { username:m.username, email:m.email, role:m.role }; setCurrentUser(s); ls.set('active_user', s); syncWithCloud(); }
+        else setAuthError('Username atau password salah.');
       };
 
-      const handleRegisterSubmit = (e) => {
-        e.preventDefault();
-        if (!regUser || !regPass || !regFullName) {
-          setAuthMsg({ text: "Lengkapi semua data!", type: "error" });
-          return;
-        }
-        if (users.some(u => u.username.toLowerCase() === regUser.toLowerCase())) {
-          setAuthMsg({ text: "Username sudah digunakan!", type: "error" });
-          return;
-        }
-        const newUser = { id: "u_" + Date.now(), username: regUser, password: regPass, role: regRole, fullName: regFullName };
-        const updated = [...users, newUser];
-        setUsers(updated);
-        setAuthMsg({ text: "Registrasi berhasil, silakan login!", type: "success" });
-        setIsRegOpen(false);
-        setRegUser(""); setRegPass(""); setRegFullName("");
+      const handleLogin = async (e) => {
+        e.preventDefault(); setAuthError('');
+        if (!loginForm.username || !loginForm.password) { setAuthError('Mohon isi username dan password!'); return; }
+        const qStr = loginForm.username.toLowerCase().trim();
+        if (apiUrl) {
+          setSyncing(true);
+          try {
+            const res = await fetch(`${apiUrl}?action=getUsers`);
+            const data = await res.json();
+            if (data.status === 'success') {
+              const m = data.data.find(u => (u.username.toString().toLowerCase().trim()===qStr || u.email.toString().toLowerCase().trim()===qStr) && u.password.toString()===loginForm.password.toString());
+              if (m) { const s = { username:m.username, email:m.email, role:m.role||'user' }; setCurrentUser(s); ls.set('active_user', s); syncWithCloud(); }
+              else setAuthError('Username atau password salah / Akun belum disetujui admin.');
+            } else setAuthError('Error memverifikasi kredensial.');
+          } catch(err) { setAuthError('Backend Cloud tidak merespon. Mencoba login lokal...'); attemptLocalLogin(qStr); }
+          finally { setSyncing(false); }
+        } else { attemptLocalLogin(qStr); }
       };
 
       const handleLogout = () => {
-        stopPlayback();
-        setCurrentUser(null);
-        localStorage.removeItem("curUser");
-        setActiveTab("beranda");
+        setCurrentUser(null); ls.remove('active_user');
+        isPlayingFullSurahRef.current = false; isPlayingRangeRef.current = false;
+        setIsPlayingFullSurah(false); setIsPlayingRange(false);
+        if (audioRef.current) audioRef.current.pause();
+        setPlayingAudio(null);
       };
 
-      // Handler Rencana Kerja / Kegiatan
-      const openAddKegModal = () => {
-        setKegFormType("add");
-        setKegTitle("");
-        setKegStart(formatToInputDate(new Date().toISOString().split('T')[0]));
-        setKegEnd(formatToInputDate(new Date().toISOString().split('T')[0]));
-        setKegPic(users.filter(u => u.role === "admin")[0]?.id || "");
-        setKegDesc("");
-        setKegStatus("Belum Selesai");
-        setIsKegModalOpen(true);
-      };
-
-      const openEditKegModal = (k) => {
-        setKegFormType("edit");
-        setEditingKegId(k.id);
-        setKegTitle(k.title);
-        setKegStart(formatToInputDate(k.start));
-        setKegEnd(formatToInputDate(k.end));
-        setKegPic(k.pic || "");
-        setKegDesc(k.desc || "");
-        setKegStatus(k.status);
-        setIsKegModalOpen(true);
-      };
-
-      const handleKegSubmit = (e) => {
+      // ── Activities (Todos) ──
+      const handleSaveActivity = async (e) => {
         e.preventDefault();
-        if (kegFormType === "add") {
-          const newKeg = {
-            id: "k_" + Date.now(),
-            title: kegTitle,
-            start: kegStart, 
-            end: kegEnd,
-            pic: kegPic,
-            desc: kegDesc,
-            status: kegStatus
-          };
-          setKegiatan([...kegiatan, newKeg]);
-        } else {
-          setKegiatan(kegiatan.map(k => k.id === editingKegId ? {
-            ...k, title: kegTitle, start: kegStart, end: kegEnd, pic: kegPic, desc: kegDesc, status: kegStatus
-          } : k));
-        }
-        setIsKegModalOpen(false);
+        if (currentUser.role !== 'admin') { showToast('Hanya Administrator yang dapat memanipulasi rencana kerja!', 'error'); return; }
+        const payload = { action:'saveTodo', id: activityForm.id || Date.now().toString(), task:activityForm.task, subActivity:activityForm.subActivity, pic:activityForm.pic, startDate:formatToInputDate(activityForm.startDate) || todayInputDate(), endDate:formatToInputDate(activityForm.endDate), progress:Number(activityForm.progress), keterangan:activityForm.keterangan||'', createdBy:currentUser.username };
+        if (apiUrl) {
+          setSyncing(true);
+          try {
+            const res = await fetch(apiUrl, { method:'POST', mode:'cors', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(payload) });
+            const data = await res.json();
+            if (data.status === 'success') { setIsModalOpen(false); showToast('Rencana kerja berhasil disimpan!'); syncWithCloud(); }
+            else showToast('Gagal menyimpan: ' + data.message, 'error');
+          } catch(err) { showToast('Koneksi Cloud gagal. Disimpan lokal.', 'warning'); saveActivityLocally(payload); }
+          finally { setSyncing(false); }
+        } else { saveActivityLocally(payload); }
       };
 
-      const handleImgFileChange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            setAnnImage(reader.result);
-          };
-          reader.readAsDataURL(file);
-        }
+      const saveActivityLocally = (payload) => {
+        const list = ls.get('local_todos', FALLBACK_TODOS);
+        const idx = list.findIndex(t => t.id.toString()===payload.id.toString());
+        const upd = idx !== -1 ? list.map((t,i) => i===idx ? payload : t) : [payload, ...list];
+        setTodos(upd); ls.set('local_todos', upd); setIsModalOpen(false); showToast('Tugas disimpan lokal!');
       };
 
-      // Handler Informasi / Pengumuman
-      const openAddAnnModal = () => {
-        setAnnFormType("add");
-        setAnnTitle("");
-        setAnnContent("");
-        setAnnImage(null);
-        setIsAnnModalOpen(true);
+      const handleDeleteActivity = (activityId) => {
+        askConfirmation('Apakah Anda yakin ingin menghapus rencana kerja ini?', async () => {
+          if (apiUrl) {
+            setSyncing(true);
+            try {
+              const res = await fetch(apiUrl, { method:'POST', mode:'cors', headers:{'Content-Type':'text/plain'}, body:JSON.stringify({ action:'deleteTodo', id:activityId }) });
+              const data = await res.json();
+              if (data.status === 'success') { showToast('Agenda terhapus!'); syncWithCloud(); }
+              else showToast('Gagal menghapus: ' + data.message, 'error');
+            } catch(err) { deleteActivityLocally(activityId); }
+            finally { setSyncing(false); }
+          } else { deleteActivityLocally(activityId); }
+        });
       };
 
-      const openEditAnnModal = (a) => {
-        setAnnFormType("edit");
-        setEditingAnnId(a.id);
-        setAnnTitle(a.title);
-        setAnnContent(a.content);
-        setAnnImage(a.image || null);
-        setIsAnnModalOpen(true);
+      const deleteActivityLocally = (actId) => {
+        const upd = ls.get('local_todos', []).filter(t => t.id.toString()!==actId.toString());
+        setTodos(upd); ls.set('local_todos', upd); showToast('Agenda terhapus lokal!');
       };
 
-      const handleAnnSubmit = (e) => {
+      const handleMarkDone = async (activity) => {
+        if (currentUser.role !== 'admin') return;
+        const payload = { action:'saveTodo', ...activity, startDate:formatToInputDate(activity.startDate), endDate:formatToInputDate(activity.endDate), progress:100 };
+        if (apiUrl) {
+          setSyncing(true);
+          try { const res = await fetch(apiUrl, { method:'POST', mode:'cors', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(payload) }); const data = await res.json(); if (data.status==='success') { showToast('Progress diperbarui ke 100%!'); syncWithCloud(); } }
+          catch(err) { saveActivityLocally(payload); }
+          finally { setSyncing(false); }
+        } else { saveActivityLocally(payload); }
+      };
+
+      const handleEditClick = (activity) => {
+        setActivityForm({ id:activity.id, task:activity.task, subActivity:activity.subActivity, pic:activity.pic, startDate:formatToInputDate(activity.startDate), endDate:formatToInputDate(activity.endDate), progress:activity.progress, keterangan:activity.keterangan||'', createdBy:activity.createdBy });
+        setIsEditing(true); setIsModalOpen(true);
+      };
+
+      const handleDateClick = (dateStr) => {
+        if (currentUser.role !== 'admin') return;
+        setActivityForm({ id:'', task:'', subActivity:'', pic:'', startDate:formatToInputDate(dateStr), endDate:formatToInputDate(dateStr), progress:0, keterangan:'', createdBy:currentUser.username });
+        setIsEditing(false); setIsModalOpen(true);
+      };
+
+      const submitKeterangan = async (e) => {
         e.preventDefault();
-        if (annFormType === "add") {
-          const newAnn = {
-            id: "a_" + Date.now(),
-            title: annTitle,
-            content: annContent,
-            date: new Date().toISOString(),
-            image: annImage
-          };
-          setAnnouncements([newAnn, ...announcements]);
-        } else {
-          setAnnouncements(announcements.map(a => a.id === editingAnnId ? {
-            ...a, title: annTitle, content: annContent, image: annImage
-          } : a));
-        }
-        setIsAnnModalOpen(false);
+        if (currentUser.role !== 'admin') return;
+        const payload = { action:'saveTodo', id:keteranganModal.todo.id.toString(), task:keteranganModal.todo.task, subActivity:keteranganModal.todo.subActivity, pic:keteranganModal.todo.pic, startDate:formatToInputDate(keteranganModal.todo.startDate), endDate:formatToInputDate(keteranganModal.todo.endDate), progress:Number(keteranganModal.todo.progress), keterangan:keteranganModal.text, createdBy:keteranganModal.todo.createdBy||currentUser.username };
+        if (apiUrl) {
+          setSyncing(true);
+          try { const res = await fetch(apiUrl, { method:'POST', mode:'cors', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(payload) }); const data = await res.json(); if (data.status==='success') { showToast('Keterangan berhasil diperbarui!'); syncWithCloud(); setKeteranganModal({ isOpen:false, todo:null, text:'' }); } else showToast('Gagal: ' + data.message, 'error'); }
+          catch(err) { saveActivityLocally(payload); setKeteranganModal({ isOpen:false, todo:null, text:'' }); }
+          finally { setSyncing(false); }
+        } else { saveActivityLocally(payload); setKeteranganModal({ isOpen:false, todo:null, text:'' }); }
       };
 
-      // Sinkronisasi ke Cloud via Google Sheets Apps Script API
-      const handleCloudSync = async () => {
-        if (!apiUrl) {
-          alert("Silakan atur URL API Google Apps Script terlebih dahulu di tab Sistem!");
-          return;
-        }
-        setSyncStatus("Menghubungkan...");
-        try {
-          // POST Kegiatan ke Backend
-          for (let k of kegiatan) {
-            await fetch(apiUrl, {
-              method: "POST",
-              mode: "no-cors",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                action: "saveTodo",
-                id: k.id,
-                task: k.title,
-                subActivity: k.desc,
-                pic: k.pic,
-                startDate: k.start,
-                endDate: k.end,
-                progress: k.status === "Selesai" ? 100 : 0
-              })
-            });
-          }
-          setSyncStatus("Tersinkronisasi");
-          alert("Sinkronisasi database awan berhasil!");
-        } catch (error) {
-          console.error(error);
-          setSyncStatus("Gagal");
-          alert("Gagal melakukan sinkronisasi database awan.");
-        }
+      // ── Infos ──
+      const handleSaveInfo = async (e) => {
+        e.preventDefault();
+        if (currentUser.role !== 'admin') { showToast('Hanya Administrator yang dapat menambahkan informasi!', 'error'); return; }
+        const payload = { action:'saveInfo', id:infoForm.id||Date.now().toString(), title:infoForm.title, content:infoForm.content, timestamp:new Date().toISOString(), createdBy:currentUser.username };
+        if (apiUrl) {
+          setSyncing(true);
+          try { const res = await fetch(apiUrl, { method:'POST', mode:'cors', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(payload) }); const data = await res.json(); if (data.status==='success') { setIsInfoModalOpen(false); setInfoForm({ id:'',title:'',content:'' }); setIsEditingInfo(false); showToast(isEditingInfo?'Pengumuman direvisi!':'Pengumuman dipublikasikan!'); syncWithCloud(); } else showToast('Gagal: ' + data.message, 'error'); }
+          catch(err) { showToast('Koneksi Cloud bermasalah. Disimpan lokal.', 'warning'); saveInfoLocally(payload); }
+          finally { setSyncing(false); }
+        } else { saveInfoLocally(payload); }
       };
 
-      if (!currentUser) {
-        return (
-          <div className="min-h-screen bg-gradient-to-tr from-slate-900 via-emerald-950 to-slate-900 flex items-center justify-center p-4">
-            <div className="w-full max-w-md bg-white dark:bg-stone-900 rounded-3xl shadow-2xl overflow-hidden border border-emerald-500/10">
-              <div className="p-8 text-center bg-gradient-to-b from-emerald-800 to-emerald-950 text-white">
-                <h1 className="text-2xl font-black tracking-wide">ManiCalendar</h1>
-                <p className="text-emerald-300 text-xs mt-1">Sistem Kegiatan Madrasah & Al-Quran Player</p>
-              </div>
+      const saveInfoLocally = (payload) => {
+        const list = ls.get('local_infos', FALLBACK_INFOS);
+        const idx = list.findIndex(i => i.id.toString()===payload.id.toString());
+        const upd = idx !== -1 ? list.map((i,x) => x===idx ? payload : i) : [payload, ...list];
+        setInfos(upd); ls.set('local_infos', upd); setIsInfoModalOpen(false); setInfoForm({ id:'',title:'',content:'' }); setIsEditingInfo(false); showToast('Informasi disimpan lokal!');
+      };
 
-              <div className="p-8 space-y-4">
-                {authMsg.text && (
-                  <div className={`p-3 rounded-xl text-xs font-semibold ${authMsg.type === "success" ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800"}`}>
-                    {authMsg.text}
-                  </div>
-                )}
+      const handleEditInfo = (info) => { setInfoForm({ id:info.id, title:info.title, content:info.content }); setIsEditingInfo(true); setIsInfoModalOpen(true); };
 
-                {!isRegOpen ? (
-                  <form onSubmit={handleLoginSubmit} className="space-y-4">
-                    <div>
-                      <label className="block text-[10px] font-extrabold uppercase tracking-widest text-slate-400 mb-1">Username</label>
-                      <input
-                        type="text"
-                        required
-                        value={loginUser}
-                        onChange={(e) => setLoginUser(e.target.value)}
-                        placeholder="admin / santri"
-                        className="w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-emerald-600 outline-none dark:bg-stone-850 dark:border-stone-800 dark:text-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-extrabold uppercase tracking-widest text-slate-400 mb-1">Password</label>
-                      <div className="relative">
-                        <input
-                          type={showLoginPass ? "text" : "password"}
-                          required
-                          value={loginPass}
-                          onChange={(e) => setLoginPass(e.target.value)}
-                          placeholder="Masukkan password"
-                          className="w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-emerald-600 outline-none dark:bg-stone-850 dark:border-stone-800 dark:text-white"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowLoginPass(!showLoginPass)}
-                          className="absolute right-3 top-3 text-slate-400"
-                        >
-                          <i className={`fa-solid ${showLoginPass ? 'fa-eye-slash' : 'fa-eye'}`}></i>
-                        </button>
-                      </div>
-                    </div>
-                    <button type="submit" className="w-full py-3 bg-emerald-700 hover:bg-emerald-600 text-white font-bold rounded-xl shadow-lg transition">
-                      Masuk Sistem
-                    </button>
-                    <p className="text-center text-xs text-slate-500">
-                      Pengguna baru? <button type="button" onClick={() => setIsRegOpen(true)} className="text-emerald-700 font-bold hover:underline">Registrasi disini</button>
-                    </p>
-                  </form>
-                ) : (
-                  <form onSubmit={handleRegisterSubmit} className="space-y-4">
-                    <div>
-                      <label className="block text-[10px] font-extrabold uppercase tracking-widest text-slate-400 mb-1">Nama Lengkap</label>
-                      <input
-                        type="text"
-                        required
-                        value={regFullName}
-                        onChange={(e) => setRegFullName(e.target.value)}
-                        placeholder="Nama Lengkap Anda"
-                        className="w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-emerald-600 outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-extrabold uppercase tracking-widest text-slate-400 mb-1">Username</label>
-                      <input
-                        type="text"
-                        required
-                        value={regUser}
-                        onChange={(e) => setRegUser(e.target.value)}
-                        placeholder="Pilih username"
-                        className="w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-emerald-600 outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-extrabold uppercase tracking-widest text-slate-400 mb-1">Password</label>
-                      <div className="relative">
-                        <input
-                          type={showRegPass ? "text" : "password"}
-                          required
-                          value={regPass}
-                          onChange={(e) => setRegPass(e.target.value)}
-                          placeholder="Sandi baru"
-                          className="w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-emerald-600 outline-none"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowRegPass(!showRegPass)}
-                          className="absolute right-3 top-3 text-slate-400"
-                        >
-                          <i className={`fa-solid ${showRegPass ? 'fa-eye-slash' : 'fa-eye'}`}></i>
-                        </button>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-extrabold uppercase tracking-widest text-slate-400 mb-1">Hak Akses / Role</label>
-                      <select
-                        value={regRole}
-                        onChange={(e) => setRegRole(e.target.value)}
-                        className="w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-emerald-600 outline-none"
-                      >
-                        <option value="santri">Santri</option>
-                        <option value="admin">Ustadz / Admin</option>
-                      </select>
-                    </div>
-                    <button type="submit" className="w-full py-3 bg-emerald-700 hover:bg-emerald-600 text-white font-bold rounded-xl shadow-lg transition">
-                      Daftar Akun
-                    </button>
-                    <p className="text-center text-xs text-slate-500">
-                      Sudah punya akun? <button type="button" onClick={() => setIsRegOpen(false)} className="text-emerald-700 font-bold hover:underline">Log In</button>
-                    </p>
-                  </form>
-                )}
+      const handleDeleteInfo = (infoId) => {
+        askConfirmation('Apakah Anda yakin ingin menghapus pengumuman ini?', async () => {
+          if (apiUrl) {
+            setSyncing(true);
+            try { const res = await fetch(apiUrl, { method:'POST', mode:'cors', headers:{'Content-Type':'text/plain'}, body:JSON.stringify({ action:'deleteInfo', id:infoId }) }); const data = await res.json(); if (data.status==='success') { showToast('Pengumuman terhapus!'); syncWithCloud(); } else showToast('Gagal: '+data.message,'error'); }
+            catch(err) { const upd = ls.get('local_infos',[]).filter(i => i.id.toString()!==infoId.toString()); setInfos(upd); ls.set('local_infos',upd); showToast('Pengumuman terhapus lokal!'); }
+            finally { setSyncing(false); }
+          } else { const upd = ls.get('local_infos',[]).filter(i => i.id.toString()!==infoId.toString()); setInfos(upd); ls.set('local_infos',upd); showToast('Pengumuman terhapus lokal!'); }
+        });
+      };
+
+      const saveSettings = (e) => { e.preventDefault(); ls.setStr('gas_api_url', apiUrl); syncWithCloud(apiUrl); showToast('URL Google Apps Script berhasil disimpan!'); };
+
+      // ── Computed ──
+      const sortedTodos = [...todos].sort((a,b) => { const da=new Date(formatToInputDate(a.startDate)); const db=new Date(formatToInputDate(b.startDate)); if(isNaN(da)) return 1; if(isNaN(db)) return -1; return da-db; });
+      const idxOfLastRow  = currentPage * rowsPerPage;
+      const idxOfFirstRow = idxOfLastRow - rowsPerPage;
+      const currentTodos  = sortedTodos.slice(idxOfFirstRow, idxOfLastRow);
+      const totalPages    = Math.ceil(sortedTodos.length / rowsPerPage);
+
+      // ─── RENDER ───────────────────────────────────────────────────
+      return html`
+        <div class="flex-grow flex flex-col min-h-screen relative">
+
+          <!-- Toast -->
+          ${toast.show && html`
+            <div class="fixed top-20 right-4 z-50 animate-bounce">
+              <div class=${`px-4 py-3 rounded-2xl shadow-2xl flex items-center space-x-3 text-white border ${toast.type==='success'?'bg-emerald-600 border-emerald-500':toast.type==='error'?'bg-rose-600 border-rose-500':'bg-amber-500 border-amber-400'}`}>
+                ${toast.type==='success'?html`<i class="fa-solid fa-circle-check"></i>`:toast.type==='error'?html`<i class="fa-solid fa-triangle-exclamation"></i>`:html`<i class="fa-solid fa-circle-exclamation"></i>`}
+                <span class="text-xs font-bold">${toast.message}</span>
               </div>
             </div>
-          </div>
-        );
-      }
+          `}
 
-      const adminUsers = users.filter(u => u.role === "admin");
-
-      return (
-        <div className="min-h-screen flex flex-col md:flex-row">
-          
-          {/* SIDEBAR */}
-          <aside className="w-full md:w-64 bg-slate-900 text-slate-300 flex flex-col justify-between border-r border-slate-800">
-            <div>
-              <div className="p-6 border-b border-slate-800 bg-slate-950/40 flex items-center justify-between">
-                <div>
-                  <h2 className="font-extrabold text-white text-lg tracking-wider">ManiCalendar</h2>
-                  <span className="text-[9px] uppercase tracking-widest text-emerald-400 font-bold">Portal Madrasah</span>
+          <!-- Confirm Modal -->
+          ${confirmModal.isOpen && html`
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <div class="w-full max-w-sm bg-white dark:bg-stone-900 rounded-3xl p-6 border border-stone-100 dark:border-stone-800 shadow-2xl text-center">
+                <div class="w-12 h-12 rounded-full bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto mb-3">
+                  <i class="fa-solid fa-circle-question text-xl"></i>
                 </div>
-                <div className="w-8 h-8 rounded-full bg-emerald-600/35 text-emerald-400 flex items-center justify-center font-bold">
-                  {currentUser.fullName.charAt(0)}
+                <h3 class="text-sm font-bold text-slate-800 dark:text-stone-100 mb-2">Konfirmasi Tindakan</h3>
+                <p class="text-xs text-stone-500 dark:text-stone-400 mb-6">${confirmModal.message}</p>
+                <div class="flex space-x-2">
+                  <button onClick=${()=>setConfirmModal({isOpen:false,message:'',action:null})} class="flex-1 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 text-xs font-bold text-stone-500">Batal</button>
+                  <button onClick=${confirmModal.action} class="flex-1 py-2.5 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 shadow-md">Ya, Jalankan</button>
                 </div>
               </div>
-
-              <nav className="p-4 space-y-1">
-                <button
-                  onClick={() => setActiveTab("beranda")}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition ${activeTab === "beranda" ? "bg-emerald-700 text-white shadow-md shadow-emerald-700/20" : "hover:bg-slate-800 text-slate-400"}`}
-                >
-                  <i className="fa-solid fa-home"></i> Beranda & Kegiatan
-                </button>
-                <button
-                  onClick={() => setActiveTab("quran")}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition ${activeTab === "quran" ? "bg-emerald-700 text-white shadow-md shadow-emerald-700/20" : "hover:bg-slate-800 text-slate-400"}`}
-                >
-                  <i className="fa-solid fa-book-open"></i> Quran Player
-                </button>
-                <button
-                  onClick={() => setActiveTab("informasi")}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition ${activeTab === "informasi" ? "bg-emerald-700 text-white shadow-md shadow-emerald-700/20" : "hover:bg-slate-800 text-slate-400"}`}
-                >
-                  <i className="fa-solid fa-bullhorn"></i> Informasi
-                </button>
-                <button
-                  onClick={() => setActiveTab("live")}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition ${activeTab === "live" ? "bg-emerald-700 text-white shadow-md shadow-emerald-700/20" : "hover:bg-slate-800 text-slate-400"}`}
-                >
-                  <i className="fa-solid fa-kaaba"></i> Live Makkah
-                </button>
-                <button
-                  onClick={() => setActiveTab("sistem")}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition ${activeTab === "sistem" ? "bg-emerald-700 text-white shadow-md shadow-emerald-700/20" : "hover:bg-slate-800 text-slate-400"}`}
-                >
-                  <i className="fa-solid fa-gear"></i> Sistem Cloud
-                </button>
-              </nav>
             </div>
+          `}
 
-            <div className="p-4 border-t border-slate-800 bg-slate-950/25 space-y-2">
-              <div className="text-xs text-slate-500 truncate">Login: <strong>{currentUser.fullName}</strong></div>
-              <button
-                onClick={handleLogout}
-                className="w-full py-2.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-xl text-xs font-bold transition border border-rose-500/10"
-              >
-                Logout Akun
+          <!-- URL Modal -->
+          ${isUrlModalOpen && html`
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <div class="w-full max-w-md bg-white dark:bg-stone-900 rounded-3xl p-6 border border-stone-100 dark:border-stone-800 shadow-2xl">
+                <h3 class="text-sm font-bold text-slate-800 dark:text-stone-100 mb-2 flex items-center">
+                  <i class="fa-solid fa-database text-emerald-600 mr-2"></i> Pengaturan URL Database
+                </h3>
+                <p class="text-xs text-stone-500 dark:text-stone-400 mb-4">Masukkan tautan Web API Google Apps Script Anda untuk mengaktifkan sinkronisasi Cloud.</p>
+                <input type="url" class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950 text-xs focus:outline-none mb-4"
+                  placeholder="https://script.google.com/macros/s/.../exec"
+                  value=${customUrlInput}
+                  onInput=${e=>setCustomUrlInput(e.target.value)} />
+                <div class="flex space-x-2">
+                  <button onClick=${()=>setIsUrlModalOpen(false)} class="flex-1 py-2.5 rounded-xl border border-stone-200 text-xs font-bold text-stone-500">Tutup</button>
+                  <button onClick=${()=>{ setApiUrl(customUrlInput); ls.setStr('gas_api_url',customUrlInput); setIsUrlModalOpen(false); showToast('Database URL berhasil disimpan!'); }}
+                    class="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700">Simpan & Terapkan</button>
+                </div>
+              </div>
+            </div>
+          `}
+
+          <!-- Header -->
+          <header class="bg-[#0B2B26] text-white px-4 py-3 sticky top-0 z-30 shadow-md flex items-center justify-between">
+            <div class="flex items-center space-x-2.5">
+              <div class="bg-white p-1 rounded-xl flex items-center justify-center shadow-sm w-10 h-10 overflow-hidden">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/Logo_Kementerian_Agama_Republik_Indonesia.png/120px-Logo_Kementerian_Agama_Republik_Indonesia.png" alt="Logo" class="h-8 w-8 object-contain"/>
+              </div>
+              <div>
+                <h1 class="text-lg font-bold tracking-tight">mani<span style="color:#D4AF37">calendar</span></h1>
+                <p class="text-[10px] text-stone-300 font-semibold tracking-wider">Madrasah Activity Planner</p>
+              </div>
+            </div>
+            <div class="flex items-center space-x-3">
+              <button onClick=${()=>setTheme(theme==='light'?'dark':'light')} class="p-2 rounded-lg hover:bg-stone-800 transition-colors" title="Ganti Tema">
+                ${theme==='light'?html`<i class="fa-solid fa-moon"></i>`:html`<i class="fa-solid fa-sun"></i>`}
               </button>
+              <span class=${`text-[10px] px-2 py-1 rounded-full font-bold uppercase ${apiConnected?'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30':'bg-amber-500/20 text-amber-400 border border-amber-500/30'}`}>
+                ${apiConnected?html`<i class="fa-solid fa-cloud-sun mr-1"></i>`:html`<i class="fa-solid fa-wifi mr-1"></i>`}
+                ${apiConnected?'Cloud Terkoneksi':'Mode Lokal'}
+              </span>
+              ${currentUser && html`
+                <button onClick=${handleLogout} class="bg-rose-600/35 hover:bg-rose-600 border border-rose-500/40 text-rose-200 text-xs px-3 py-1.5 rounded-xl font-medium transition-all">
+                  <i class="fa-solid fa-right-from-bracket mr-1"></i>Keluar
+                </button>
+              `}
             </div>
-          </aside>
+          </header>
 
-          {/* MAIN SPACE */}
-          <main className="flex-1 p-6 md:p-8 overflow-y-auto">
-            
-            {/* TAB: BERANDA */}
-            {activeTab === "beranda" && (
-              <div className="space-y-6">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div>
-                    <h1 className="text-2xl font-extrabold text-slate-900">Rencana Kerja Madrasah</h1>
-                    <p className="text-slate-500 text-xs">Jadwal agenda kegiatan, kepanitiaan, dan pemantauan setoran akademik.</p>
+          <!-- Auth Screen -->
+          ${!currentUser ? html`
+            <main class="flex-grow flex items-center justify-center p-4">
+              <div class="w-full max-w-md glass-card rounded-3xl shadow-2xl overflow-hidden p-6 border transition-all relative">
+                <div class="text-center mb-6">
+                  <div class="inline-block bg-[#235E52] text-[#D4AF37] p-4 rounded-3xl mb-3 shadow-inner">
+                    <i class="fa-solid fa-calendar-check text-3xl"></i>
                   </div>
-                  {currentUser.role === "admin" && (
-                    <button
-                      onClick={openAddKegModal}
-                      className="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold shadow transition"
-                    >
-                      <i className="fa-solid fa-plus mr-1"></i> Tambah Kegiatan
-                    </button>
-                  )}
+                  <h2 class="text-2xl font-extrabold text-[#0B2B26] dark:text-stone-100">Selamat Datang di manICalendar</h2>
+                  <p class="text-xs text-stone-500 dark:text-stone-400 mt-1">Manajemen Aktivitas & Agenda Madrasah</p>
                 </div>
+                ${authError && html`<div class="bg-red-500/10 border border-red-500/30 text-red-500 text-xs p-3 rounded-xl mb-4 text-center"><i class="fa-solid fa-triangle-exclamation mr-1"></i> ${authError}</div>`}
+                ${authSuccess && html`<div class="bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 text-xs p-3 rounded-xl mb-4 text-center"><i class="fa-solid fa-circle-check mr-1"></i> ${authSuccess}</div>`}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {kegiatan.map((k) => {
-                    const picObj = users.find(u => u.id === k.pic);
-                    return (
-                      <div key={k.id} className="bg-white rounded-2xl border p-5 space-y-4 shadow-sm hover:shadow transition relative flex flex-col justify-between">
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full ${k.status === "Selesai" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
-                              {k.status}
-                            </span>
-                            <span className="text-[10px] text-slate-400">
-                              <i className="fa-solid fa-calendar-day mr-1"></i>
-                              {formatDateDisplay(k.start)} s/d {formatDateDisplay(k.end)}
-                            </span>
-                          </div>
-                          <h3 className="font-bold text-slate-900 text-base">{k.title}</h3>
-                          <p className="text-xs text-slate-500 mt-1">{k.desc}</p>
+                ${isRegisterMode ? html`
+                  <form onSubmit=${handleRegister} class="space-y-4">
+                    <div>
+                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Username / Nama Lengkap</label>
+                      <input type="text" required class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-slate-800 dark:text-stone-100" placeholder="Contoh: Rafliano" value=${regForm.username} onInput=${e=>setRegForm({...regForm,username:e.target.value})} />
+                    </div>
+                    <div>
+                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Alamat Email</label>
+                      <input type="email" required class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-slate-800 dark:text-stone-100" placeholder="Contoh: rafli@school.id" value=${regForm.email} onInput=${e=>setRegForm({...regForm,email:e.target.value})} />
+                    </div>
+                    <div>
+                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Password (Min 3 Karakter)</label>
+                      <div class="relative">
+                        <input type=${showRegPassword?'text':'password'} required minLength="3" class="w-full px-4 py-3 pr-10 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-slate-800 dark:text-stone-100" placeholder="••••••••" value=${regForm.password} onInput=${e=>setRegForm({...regForm,password:e.target.value})} />
+                        <button type="button" onClick=${()=>setShowRegPassword(!showRegPassword)} class="absolute right-3 top-3.5 text-stone-400">
+                          <i class=${`fa-solid ${showRegPassword?'fa-eye-slash':'fa-eye'}`}></i>
+                        </button>
+                      </div>
+                    </div>
+                    <button type="submit" disabled=${syncing} class="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-[#235E52] text-white font-bold transition-all transform active:scale-95 disabled:opacity-50">
+                      ${syncing?html`<i class="fa-solid fa-spinner animate-spin"></i>`:'Daftar Akun Baru'}
+                    </button>
+                    <div class="text-center text-xs text-stone-500 mt-4">Sudah punya akun? <button type="button" onClick=${()=>{setIsRegisterMode(false);setAuthError('');}} class="text-emerald-600 font-bold hover:underline">Masuk disini</button></div>
+                  </form>
+                ` : html`
+                  <form onSubmit=${handleLogin} class="space-y-4">
+                    <div>
+                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Username atau Email</label>
+                      <input type="text" required class="w-full px-4 py-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-slate-800 dark:text-stone-100" placeholder="Masukkan Username atau Email" value=${loginForm.username} onInput=${e=>setLoginForm({...loginForm,username:e.target.value})} />
+                    </div>
+                    <div>
+                      <label class="block text-xs font-semibold uppercase tracking-wider text-stone-500 mb-1">Password (Min 3 Karakter)</label>
+                      <div class="relative">
+                        <input type=${showPassword?'text':'password'} required minLength="3" class="w-full px-4 py-3 pr-10 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-slate-800 dark:text-stone-100" placeholder="••••••••" value=${loginForm.password} onInput=${e=>setLoginForm({...loginForm,password:e.target.value})} />
+                        <button type="button" onClick=${()=>setShowPassword(!showPassword)} class="absolute right-3 top-3.5 text-stone-400">
+                          <i class=${`fa-solid ${showPassword?'fa-eye-slash':'fa-eye'}`}></i>
+                        </button>
+                      </div>
+                    </div>
+                    <button type="submit" disabled=${syncing} class="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-[#235E52] text-white font-bold transition-all transform active:scale-95 disabled:opacity-50">
+                      ${syncing?html`<i class="fa-solid fa-spinner animate-spin"></i>`:'Masuk Aplikasi'}
+                    </button>
+                    <div class="text-center text-xs text-stone-500 mt-4">Belum punya akun? <button type="button" onClick=${()=>{setIsRegisterMode(true);setAuthError('');}} class="text-emerald-600 font-bold hover:underline">Registrasi disini</button></div>
+                  </form>
+                `}
+                <div class="mt-6 pt-4 border-t border-stone-100 dark:border-stone-800 text-center">
+                  <button onClick=${()=>{setCustomUrlInput(apiUrl);setIsUrlModalOpen(true);}} class="text-xs font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl">
+                    <i class="fa-solid fa-database mr-1"></i> Set URL Database
+                  </button>
+                </div>
+              </div>
+            </main>
+          ` : html`
+            <!-- Main App -->
+            <main class="flex-grow max-w-4xl w-full mx-auto p-4 flex flex-col space-y-4 pb-24">
+
+              <!-- Tab Bar -->
+              <div class="flex overflow-x-auto no-scrollbar bg-white dark:bg-stone-900 p-1.5 rounded-2xl shadow-sm border border-stone-100 dark:border-stone-800 space-x-1">
+                ${[
+                  { id:'home', icon:'fa-home', label:'Beranda' },
+                  { id:'calendar', icon:'fa-calendar-alt', label:'Kalender' },
+                  { id:'quran', icon:'fa-book-quran', label:'Quran' },
+                  { id:'radio', icon:'fa-radio', label:'Radio Rodja' },
+                  { id:'makkah', icon:'fa-brands fa-youtube', label:'Live Makkah' },
+                  { id:'madinah', icon:'fa-brands fa-youtube', label:'Live Madinah' },
+                  { id:'info', icon:'fa-circle-info', label:'Informasi' },
+                  { id:'settings', icon:'fa-cog', label:'Sistem' },
+                ].map(tab => html`
+                  <button key=${tab.id}
+                    onClick=${()=>{ setCurrentTab(tab.id); if(tab.id==='home') setCurrentPage(1); }}
+                    class=${`flex-1 min-w-[90px] flex-shrink-0 py-3 px-2 text-xs font-bold rounded-xl transition-all ${currentTab===tab.id?'bg-gradient-to-r from-emerald-600/10 to-[#235E52]/10 text-emerald-600 dark:text-emerald-400':'text-stone-400 hover:text-stone-600'}`}>
+                    <i class=${`fa-solid ${tab.icon} text-base block mb-1 text-center`}></i> ${tab.label}
+                  </button>
+                `)}
+              </div>
+
+              <!-- HOME TAB -->
+              ${currentTab==='home' && html`
+                <div class="space-y-4">
+                  <div class="sholat-card text-white p-6 rounded-3xl relative overflow-hidden shadow-xl">
+                    <div class="absolute right-[-20px] top-[-20px] opacity-10"><i class="fa-solid fa-mosque text-9xl"></i></div>
+                    <div class="relative z-10">
+                      <span class="text-[10px] uppercase font-bold tracking-widest text-emerald-300">Ahlan Wa Sahlan Bp/Ibu</span>
+                      <h3 class="text-2xl font-bold tracking-tight mt-1">Assalamualaikum, ${currentUser.username}!</h3>
+                      <p class="text-sm text-stone-200 mt-1 font-medium">Manajemen Aktifitas Madrasah</p>
+                      <div class="flex items-center space-x-2 mt-4 pt-4 border-t border-emerald-800/60">
+                        <i class="fa-regular fa-calendar-check text-[#D4AF37]"></i>
+                        <span class="text-xs font-medium text-stone-200">${getHijriDate()}</span>
+                        <span class="text-xs text-emerald-300">|</span>
+                        <span class="text-xs font-semibold text-stone-200">${formatDateStr(todayInputDate())}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
+                    <div class="flex items-center justify-between mb-4">
+                      <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-clock text-emerald-600"></i>
+                        <h4 class="font-bold text-sm text-[#0B2B26] dark:text-stone-100">Jadwal Sholat Hari Ini</h4>
+                      </div>
+                      <a href="https://www.jadwalsholat.org" target="_blank" rel="noreferrer" class="inline-block p-1 bg-stone-50 dark:bg-stone-800 rounded-lg hover:scale-105 transition-transform">
+                        <img alt="jadwal-sholat" src="https://www.jadwalsholat.org/wp-content/uploads/2013/09/jadwal-sholat.png" width="81" height="18" />
+                      </a>
+                    </div>
+                    <div class="grid grid-cols-5 gap-2 text-center">
+                      ${SHOLAT_TIMES.map(s => html`
+                        <div key=${s.name} class="bg-slate-50 dark:bg-stone-800/50 p-2.5 rounded-2xl flex flex-col items-center justify-center border border-stone-100/50 dark:border-stone-800/60">
+                          <i class=${`fa-solid ${s.icon} text-emerald-600 mb-1 text-sm`}></i>
+                          <span class="text-[10px] font-bold text-stone-500 dark:text-stone-400 block">${s.name}</span>
+                          <span class="text-xs font-extrabold text-[#0B2B26] dark:text-stone-200 mt-1">${s.time}</span>
                         </div>
+                      `)}
+                    </div>
+                  </div>
 
-                        <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-                          <span className="text-[10px] font-bold text-slate-600 truncate max-w-[150px]">
-                            <i className="fa-solid fa-user-tie mr-1"></i> PIC: {picObj ? picObj.fullName : "Tidak Ada"}
-                          </span>
+                  <!-- Tabel Rencana Kerja -->
+                  <div class="bg-white dark:bg-stone-900 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 overflow-hidden">
+                    <div class="p-5 border-b border-stone-100 dark:border-stone-800 flex items-center justify-between">
+                      <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-list-check text-emerald-600"></i>
+                        <h4 class="font-bold text-sm text-[#0B2B26] dark:text-stone-100">Rencana Kerja Madrasah</h4>
+                      </div>
+                      ${currentUser.role==='admin' && html`
+                        <button onClick=${()=>handleDateClick(todayInputDate())} class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-xl font-bold transition-all shadow-sm flex items-center">
+                          <i class="fa-solid fa-plus mr-1"></i> Tambah Aktifitas
+                        </button>
+                      `}
+                    </div>
+                    <div class="overflow-x-auto no-scrollbar">
+                      <table class="w-full text-left border-collapse">
+                        <thead>
+                          <tr class="bg-stone-50 dark:bg-stone-800/40 text-[10px] font-extrabold tracking-wider uppercase text-stone-400">
+                            <th class="px-4 py-3">No</th>
+                            <th class="px-4 py-3">Aktifitas & Sub</th>
+                            <th class="px-4 py-3">Tgl Mulai</th>
+                            <th class="px-4 py-3">Tgl Selesai</th>
+                            <th class="px-4 py-3">Progress</th>
+                            <th class="px-4 py-3">PIC</th>
+                            <th class="px-4 py-3 text-center">Aksi</th>
+                          </tr>
+                        </thead>
+                        <tbody class="divide-y divide-stone-100 dark:divide-stone-800 text-xs">
+                          ${currentTodos.length===0 ? html`
+                            <tr><td colSpan="7" class="text-center py-8 text-stone-400">Belum ada agenda rencana kerja terdaftar.</td></tr>
+                          ` : currentTodos.map((todo, idx) => html`
+                            <tr key=${todo.id} class="hover:bg-stone-50/50 dark:hover:bg-stone-800/20">
+                              <td class="px-4 py-4 font-bold text-stone-400">${idxOfFirstRow+idx+1}</td>
+                              <td class="px-4 py-4">
+                                <button onClick=${()=>setKeteranganModal({isOpen:true,todo,text:todo.keterangan||''})} class="text-left group w-full outline-none focus:outline-none">
+                                  <div class="font-bold text-emerald-700 dark:text-emerald-500 text-sm group-hover:underline cursor-pointer flex items-center">
+                                    ${todo.task} <i class="fa-solid fa-arrow-up-right-from-square text-[10px] ml-2 opacity-50 group-hover:opacity-100 transition-opacity"></i>
+                                  </div>
+                                  <div class="text-xs text-stone-500 dark:text-stone-400 mt-0.5">${todo.subActivity}</div>
+                                </button>
+                              </td>
+                              <td class="px-4 py-4 text-stone-600 dark:text-stone-300 font-medium whitespace-nowrap">${formatDateStr(todo.startDate)}</td>
+                              <td class="px-4 py-4 text-stone-600 dark:text-stone-300 font-medium whitespace-nowrap">${formatDateStr(todo.endDate)}</td>
+                              <td class="px-4 py-4">
+                                <div class="flex items-center space-x-2">
+                                  <div class="w-16 bg-stone-100 dark:bg-stone-800 rounded-full h-1.5 overflow-hidden">
+                                    <div class="bg-emerald-600 h-full rounded-full" style=${{width:`${todo.progress}%`}}></div>
+                                  </div>
+                                  <span class="font-bold text-[11px]">${todo.progress}%</span>
+                                </div>
+                              </td>
+                              <td class="px-4 py-4 whitespace-nowrap"><span class="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-semibold px-2 py-1 rounded-md text-[10px]">${todo.pic}</span></td>
+                              <td class="px-4 py-4 text-center whitespace-nowrap">
+                                ${currentUser.role==='admin' ? html`
+                                  <div class="flex items-center justify-center space-x-1.5">
+                                    ${todo.progress < 100 && html`<button onClick=${()=>handleMarkDone(todo)} class="bg-emerald-500 hover:bg-emerald-600 text-white p-1.5 rounded-lg text-xs" title="Setujui Selesai"><i class="fa-solid fa-check"></i></button>`}
+                                    <button onClick=${()=>handleEditClick(todo)} class="bg-blue-500 hover:bg-blue-600 text-white p-1.5 rounded-lg text-xs" title="Ubah"><i class="fa-solid fa-edit"></i></button>
+                                    <button onClick=${()=>handleDeleteActivity(todo.id)} class="bg-red-500 hover:bg-red-600 text-white p-1.5 rounded-lg text-xs" title="Hapus"><i class="fa-solid fa-trash"></i></button>
+                                  </div>
+                                ` : html`<span class="text-stone-400 italic">Hanya Lihat</span>`}
+                              </td>
+                            </tr>
+                          `)}
+                        </tbody>
+                      </table>
+                    </div>
+                    ${totalPages>1 && html`
+                      <div class="p-4 bg-slate-50 dark:bg-stone-900 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between">
+                        <button disabled=${currentPage===1} onClick=${()=>setCurrentPage(currentPage-1)} class="px-3 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-stone-800 border dark:border-stone-700 disabled:opacity-50 hover:bg-stone-100">Sebelumnya</button>
+                        <span class="text-xs font-semibold text-stone-500">Halaman ${currentPage} dari ${totalPages}</span>
+                        <button disabled=${currentPage===totalPages} onClick=${()=>setCurrentPage(currentPage+1)} class="px-3 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-stone-800 border dark:border-stone-700 disabled:opacity-50 hover:bg-stone-100">Selanjutnya</button>
+                      </div>
+                    `}
+                  </div>
+                </div>
+              `}
 
-                          {currentUser.role === "admin" && (
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                onClick={() => openEditKegModal(k)}
-                                className="p-1.5 text-slate-400 hover:text-emerald-700 transition"
-                              >
-                                <i className="fa-solid fa-edit"></i>
+              <!-- CALENDAR TAB -->
+              ${currentTab==='calendar' && html`
+                <div class="space-y-4">
+                  ${currentUser.role==='admin' ? html`
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+                      <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 md:col-span-5 flex flex-col items-center">
+                        <h4 class="font-bold text-sm text-[#0B2B26] dark:text-stone-100 mb-3 flex items-center">
+                          <i class="fa-solid fa-moon text-emerald-600 mr-2"></i> Kalender Hijriyah
+                        </h4>
+                        <div class="w-full flex items-center justify-center rounded-2xl overflow-hidden bg-slate-50 border border-stone-100">
+                          <iframe title="islamic-calendar" style=${{width:'250px',height:'312px',border:'none'}} scrolling="no" src="https://www.islamicfinder.org/islamic-calendar/widgetGregorian?type=Gregorian"></iframe>
+                        </div>
+                      </div>
+                      <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 md:col-span-7">
+                        <h4 class="font-bold text-sm text-[#0B2B26] dark:text-stone-100 flex items-center mb-4">
+                          <i class="fa-solid fa-calendar-days text-emerald-600 mr-2"></i> Klik Tanggal untuk Tambah Tugas
+                        </h4>
+                        <div class="grid grid-cols-7 gap-1 text-center font-bold text-[11px] mb-2 text-stone-400">
+                          ${['Min','Sen','Sel','Rab','Kam','Jum','Sab'].map(d=>html`<span key=${d}>${d}</span>`)}
+                        </div>
+                        <div class="grid grid-cols-7 gap-1">
+                          ${Array.from({length:31},(_,i)=>{
+                            const dn = i+1;
+                            const ds = `2026-06-${dn.toString().padStart(2,'0')}`;
+                            const dt = todos.filter(t=>formatToInputDate(t.startDate)<=ds && formatToInputDate(t.endDate)>=ds);
+                            return html`
+                              <button key=${dn} onClick=${()=>handleDateClick(ds)} class="aspect-square flex flex-col justify-between items-center p-1 bg-stone-50 hover:bg-emerald-50 dark:bg-stone-800/40 dark:hover:bg-stone-800 rounded-xl relative border border-stone-100 dark:border-stone-800 transition-all hover:scale-[1.05]">
+                                <span class="text-xs font-bold self-start text-stone-600 dark:text-stone-300">${dn}</span>
+                                ${dt.length>0 && html`<span class="w-2 h-2 rounded-full bg-emerald-500 absolute bottom-1 right-1"></span>`}
                               </button>
-                              <button
-                                onClick={() => setKegiatan(kegiatan.filter(x => x.id !== k.id))}
-                                className="p-1.5 text-slate-400 hover:text-rose-600 transition"
-                              >
-                                <i className="fa-solid fa-trash"></i>
-                              </button>
+                            `;
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  ` : html`
+                    <div class="bg-white dark:bg-stone-900 p-8 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800 flex flex-col items-center justify-center max-w-md mx-auto">
+                      <h4 class="font-bold text-base text-[#0B2B26] dark:text-stone-100 mb-4 flex items-center">
+                        <i class="fa-solid fa-moon text-emerald-600 mr-2 animate-pulse"></i> Kalender Hijriyah Hari Ini
+                      </h4>
+                      <div class="w-full flex items-center justify-center rounded-2xl overflow-hidden bg-slate-50 dark:bg-stone-800 border border-stone-100 dark:border-stone-800 p-4">
+                        <iframe title="islamic-calendar-user" style=${{width:'250px',height:'312px',border:'none'}} scrolling="no" src="https://www.islamicfinder.org/islamic-calendar/widgetGregorian?type=Gregorian"></iframe>
+                      </div>
+                    </div>
+                  `}
+                </div>
+              `}
+
+              <!-- QURAN TAB -->
+              ${currentTab==='quran' && html`
+                <div class="space-y-4">
+                  ${!selectedSurah ? html`
+                    <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
+                      <div class="mb-4">
+                        <h4 class="font-bold text-sm text-[#0B2B26] dark:text-stone-100 flex items-center mb-2">
+                          <i class="fa-solid fa-book-open text-emerald-600 mr-2"></i> Portal Al-Quran & Terjemah
+                        </h4>
+                        <div class="relative">
+                          <input type="text" class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500" placeholder="Cari surat (Contoh: Al-Fatihah, Ya-Sin)..."
+                            value=${quranSearch} onInput=${e=>setQuranSearch(e.target.value)} />
+                          <i class="fa-solid fa-search text-stone-400 absolute left-3.5 top-3.5 text-xs"></i>
+                        </div>
+                      </div>
+                      ${loadingQuran ? html`
+                        <div class="text-center py-10"><i class="fa-solid fa-spinner animate-spin text-emerald-600 text-2xl"></i><p class="text-xs text-stone-400 mt-2">Memuat data Al-Quran...</p></div>
+                      ` : html`
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto no-scrollbar">
+                          ${quranSurahs.filter(s=>s.englishName.toLowerCase().includes(quranSearch.toLowerCase())||s.name.includes(quranSearch)).map(surah=>html`
+                            <button key=${surah.number} onClick=${()=>viewSurahDetails(surah.number,selectedQari)} class="p-3.5 rounded-2xl bg-stone-50/50 hover:bg-emerald-50/40 border border-stone-100 dark:bg-stone-800/25 dark:border-stone-800/40 text-left transition-all hover:scale-[1.01] flex items-center justify-between">
+                              <div class="flex items-center space-x-3">
+                                <span class="bg-emerald-600/10 text-emerald-600 font-bold w-7 h-7 flex items-center justify-center rounded-xl text-xs">${surah.number}</span>
+                                <div>
+                                  <div class="font-bold text-xs">${surah.englishName}</div>
+                                  <div class="text-[10px] text-stone-400 uppercase tracking-widest">${surah.englishNameTranslation} (${surah.numberOfAyahs} Ayat)</div>
+                                </div>
+                              </div>
+                              <div class="arabic-text text-lg text-emerald-700 font-bold">${surah.name}</div>
+                            </button>
+                          `)}
+                        </div>
+                      `}
+                    </div>
+                  ` : html`
+                    <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl shadow-sm border border-stone-100 dark:border-stone-800">
+                      <div class="flex flex-col space-y-4 pb-3 border-b border-stone-100 dark:border-stone-800 mb-4">
+                        <div class="flex items-center justify-between flex-wrap gap-2">
+                          <button onClick=${()=>{setSelectedSurah(null);setSurahDetails(null);isPlayingFullSurahRef.current=false;isPlayingRangeRef.current=false;setIsPlayingFullSurah(false);setIsPlayingRange(false);setStartAyah('');setEndAyah('');if(audioRef.current)audioRef.current.pause();}} class="text-xs text-emerald-600 font-bold flex items-center hover:underline">
+                            <i class="fa-solid fa-arrow-left mr-1"></i> Kembali ke Daftar
+                          </button>
+                          ${surahDetails && html`
+                            <div class="text-right">
+                              <h4 class="font-bold text-xs text-slate-800 dark:text-stone-100">${surahDetails.info.englishName}</h4>
+                              <p class="text-[10px] text-stone-400 font-semibold">${surahDetails.info.numberOfAyahs} Ayat</p>
                             </div>
-                          )}
+                          `}
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* TAB: QURAN */}
-            {activeTab === "quran" && (
-              <div className="space-y-6">
-                <div>
-                  <h1 className="text-2xl font-extrabold text-slate-900">Al-Quran Audio Player</h1>
-                  <p className="text-slate-500 text-xs">Putar murattal interaktif dengan mode repeat tak terbatas untuk memudahkan menghafal.</p>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                  {/* Parameter Setup */}
-                  <div className="lg:col-span-5 bg-white p-6 rounded-2xl border shadow-sm space-y-4">
-                    <h2 className="text-base font-bold text-slate-900 pb-2 border-b"><i class="fa-solid fa-sliders mr-1 text-emerald-700"></i> Setelan Player</h2>
-                    
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Pilih Surat</label>
-                      <select
-                        value={selSurahId}
-                        onChange={(e) => { stopPlayback(); setSelSurahId(Number(e.target.value)); }}
-                        className="w-full px-3 py-2 border rounded-xl outline-none"
-                      >
-                        {QURAN_SURAHS.map((s) => (
-                          <option key={s.id} value={s.id}>{s.id}. {s.name} ({s.totalAyahs} Ayat)</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Pilih Qari</label>
-                      <select
-                        value={selQari}
-                        onChange={(e) => { setSelQari(e.target.value); if (isPlaying) setTimeout(() => playSelectedAyah(selSurahId, curAyah), 100); }}
-                        className="w-full px-3 py-2 border rounded-xl outline-none"
-                      >
-                        {QARI_LIST.map((q) => (
-                          <option key={q.id} value={q.id}>{q.name}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Mode Pemutaran</label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          onClick={() => { stopPlayback(); setPlayMode("full"); }}
-                          className={`px-3 py-2 border rounded-xl text-xs font-bold transition ${playMode === "full" ? "border-emerald-700 bg-emerald-50 text-emerald-800" : "hover:bg-slate-50"}`}
-                        >
-                          Putar Full Surat (Repeat)
-                        </button>
-                        <button
-                          onClick={() => { stopPlayback(); setPlayMode("range"); }}
-                          className={`px-3 py-2 border rounded-xl text-xs font-bold transition ${playMode === "range" ? "border-emerald-700 bg-emerald-50 text-emerald-800" : "hover:bg-slate-50"}`}
-                        >
-                          Putar Ayat Tertentu (Repeat)
-                        </button>
-                      </div>
-                    </div>
-
-                    {playMode === "range" && (
-                      <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border">
-                        <div>
-                          <label className="text-[9px] text-slate-400 block mb-0.5">Mulai Ayat</label>
-                          <input
-                            type="number"
-                            min="1"
-                            max={QURAN_SURAHS.find(s => s.id === selSurahId)?.totalAyahs || 7}
-                            value={startAyah}
-                            onChange={(e) => { stopPlayback(); setStartAyah(Math.max(1, Number(e.target.value))); }}
-                            className="w-full px-2 py-1 border rounded-lg text-sm text-center font-semibold"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[9px] text-slate-400 block mb-0.5">Sampai Ayat</label>
-                          <input
-                            type="number"
-                            min={startAyah}
-                            max={QURAN_SURAHS.find(s => s.id === selSurahId)?.totalAyahs || 7}
-                            value={endAyah}
-                            onChange={(e) => { stopPlayback(); setEndAyah(Math.max(startAyah, Number(e.target.value))); }}
-                            className="w-full px-2 py-1 border rounded-lg text-sm text-center font-semibold"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Panel Player Tampilan */}
-                  <div className="lg:col-span-7 bg-gradient-to-br from-[#0B2B26] to-emerald-950 text-white rounded-3xl p-8 border shadow flex flex-col justify-between min-h-[300px]">
-                    <div className="flex justify-between items-start">
-                      <span className="text-[10px] font-extrabold bg-emerald-800/50 text-emerald-300 border border-emerald-500/20 px-3 py-1 rounded-full uppercase">
-                        {playMode === "full" ? "Murottal Repeat" : "Repeat Rentang Ayat"}
-                      </span>
-                      <div className={`flex items-center ${isPlaying && !isLoadingAudio ? 'playing' : ''}`}>
-                        <span className="bar"></span>
-                        <span className="bar"></span>
-                        <span className="bar"></span>
-                        <span className="bar"></span>
-                      </div>
-                    </div>
-
-                    <div className="my-6">
-                      <h3 className="arabic-text text-right text-4xl text-emerald-100 font-normal leading-loose">
-                        {QURAN_SURAHS.find(s => s.id === selSurahId)?.arabic}
-                      </h3>
-                      <p className="text-xl font-bold mt-2">Surah {QURAN_SURAHS.find(s => s.id === selSurahId)?.name}</p>
-                      <p className="text-xs text-emerald-300">Qari: {QARI_LIST.find(q => q.id === selQari)?.name}</p>
-                    </div>
-
-                    <div className="border-t border-emerald-900 pt-4 flex items-center justify-between">
-                      <div>
-                        <span className="text-[9px] block text-emerald-400 uppercase">Sedang Melantunkan</span>
-                        <span className="text-base font-extrabold">Ayat {curAyah}</span>
-                      </div>
-
-                      {isLoadingAudio && (
-                        <span className="text-xs text-emerald-400 flex items-center gap-1.5 animate-pulse">
-                          <i className="fa-solid fa-spinner animate-spin"></i> Menghubungkan MP3...
-                        </span>
-                      )}
-                      {audioError && <span className="text-xs text-rose-400">{audioError}</span>}
-
-                      <div className="flex items-center gap-4">
-                        <button onClick={handlePrevAyah} className="p-2 bg-emerald-900/50 hover:bg-emerald-900 text-white rounded-full transition">
-                          <i className="fa-solid fa-step-backward"></i>
-                        </button>
-                        
-                        {!isPlaying ? (
-                          <button onClick={startPlayback} className="p-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-full transition shadow-lg shadow-emerald-500/25">
-                            <i className="fa-solid fa-play"></i>
-                          </button>
-                        ) : (
-                          <button onClick={togglePlayPause} className="p-4 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-full transition shadow-lg">
-                            <i className="fa-solid fa-pause"></i>
-                          </button>
-                        )}
-
-                        <button onClick={stopPlayback} className="p-2 bg-rose-950/50 hover:bg-rose-900 text-rose-300 rounded-full transition">
-                          <i className="fa-solid fa-stop"></i>
-                        </button>
-
-                        <button onClick={handleNextAyah} className="p-2 bg-emerald-900/50 hover:bg-emerald-900 text-white rounded-full transition">
-                          <i className="fa-solid fa-step-forward"></i>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* TAB: INFORMASI */}
-            {activeTab === "informasi" && (
-              <div className="space-y-6">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div>
-                    <h1 className="text-2xl font-extrabold text-slate-900">Informasi & Pengumuman</h1>
-                    <p className="text-slate-500 text-xs">Papan pengumuman kegiatan akademik dan kalender madrasah terbaru.</p>
-                  </div>
-                  {currentUser.role === "admin" && (
-                    <button
-                      onClick={openAddAnnModal}
-                      className="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold shadow transition"
-                    >
-                      <i className="fa-solid fa-plus mr-1"></i> Buat Pengumuman
-                    </button>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {announcements.map((a) => (
-                    <div key={a.id} className="bg-white rounded-2xl p-6 border shadow-sm space-y-4 hover:shadow transition">
-                      <div className="flex items-center justify-between border-b pb-2">
-                        <span className="text-[10px] text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full">
-                          <i className="fa-solid fa-clock mr-1"></i>
-                          {new Date(a.date).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
-                        </span>
-
-                        {currentUser.role === "admin" && (
-                          <div className="flex items-center gap-1.5">
-                            <button onClick={() => openEditAnnModal(a)} className="text-xs text-amber-600 font-bold hover:underline">Revisi</button>
-                            <button onClick={() => setAnnouncements(announcements.filter(x => x.id !== a.id))} className="text-xs text-rose-600 font-bold hover:underline">Hapus</button>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 bg-stone-50 dark:bg-stone-800/40 p-4 rounded-2xl border border-stone-100 dark:border-stone-800">
+                          <div class="flex flex-col">
+                            <label class="text-[9px] font-bold text-stone-400 uppercase tracking-wider mb-1"><i class="fa-solid fa-microphone mr-1 text-emerald-600"></i> Pilihan Qari / Reciter</label>
+                            <select value=${selectedQari} onChange=${e=>{setSelectedQari(e.target.value);viewSurahDetails(selectedSurah,e.target.value);}} class="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-xs rounded-xl px-2.5 py-1.5 font-bold text-slate-800 dark:text-stone-200 focus:outline-none">
+                              ${QARI_LIST.map(q=>html`<option key=${q.id} value=${q.id}>${q.name}</option>`)}
+                            </select>
                           </div>
-                        )}
-                      </div>
-
-                      <h3 className="font-extrabold text-slate-900 text-lg">{a.title}</h3>
-                      <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-line">{a.content}</p>
-
-                      {/* TAMPILAN GAMBAR LAMPIRAN JIKA ADA */}
-                      {a.image && (
-                        <div className="mt-3 overflow-hidden rounded-xl border border-slate-100 shadow-sm max-h-72">
-                          <img src={a.image} alt="Lampiran Pengumuman" className="w-full h-full object-cover" />
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* TAB: LIVE MAKKAH */}
-            {activeTab === "live" && (
-              <div className="space-y-6">
-                <div>
-                  <h1 className="text-2xl font-extrabold text-slate-900">Live Streaming Masjidil Haram</h1>
-                  <p className="text-slate-500 text-xs">Akses siaran langsung Ka'bah 24 jam penuh untuk kedamaian ibadah.</p>
-                </div>
-                <div className="bg-white rounded-3xl overflow-hidden shadow border p-4">
-                  <div className="relative aspect-video rounded-2xl overflow-hidden bg-slate-950">
-                    <iframe
-                      src="https://www.youtube.com/embed/4H9ywg5G-HI?autoplay=1&mute=1"
-                      title="Makkah Live Stream"
-                      className="absolute inset-0 w-full h-full border-none"
-                      allowFullScreen
-                    ></iframe>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* TAB: SISTEM CLOUD */}
-            {activeTab === "sistem" && (
-              <div className="space-y-6">
-                <div>
-                  <h1 className="text-2xl font-extrabold text-slate-900">Sistem Integrasi Awan</h1>
-                  <p className="text-slate-500 text-xs">Atur URL API Google Sheets Anda untuk mengaktifkan sinkronisasi data instan di internet.</p>
-                </div>
-
-                <div className="bg-white rounded-2xl p-6 border shadow-sm max-w-xl space-y-4">
-                  <h2 className="text-base font-bold text-slate-900 pb-2 border-b"><i className="fa-solid fa-cloud mr-1 text-emerald-700"></i> Otorisasi & Setup Google Sheets</h2>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">URL API Google Apps Script Web App</label>
-                    <input
-                      type="text"
-                      value={apiUrl}
-                      onChange={(e) => setApiUrl(e.target.value)}
-                      placeholder="https://script.google.com/macros/s/XXXXX/exec"
-                      className="w-full px-3 py-2 border rounded-xl outline-none text-xs text-slate-800"
-                    />
-                  </div>
-                  
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={handleCloudSync}
-                      className="px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl shadow transition"
-                    >
-                      <i className="fa-solid fa-sync-alt mr-1"></i> Sinkronisasi ke Cloud
-                    </button>
-                    <div className="text-xs text-slate-500">
-                      Status Sinkronisasi: <strong className="text-emerald-700">{syncStatus}</strong>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </main>
-
-          {/* ================= MODAL DIALOGS ================= */}
-
-          {/* Modal Rencana Kerja / Kegiatan */}
-          {isKegModalOpen && (
-            <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border">
-                <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
-                  <h3 className="font-bold text-sm">
-                    {kegFormType === "add" ? "Tambah Kegiatan Rencana" : "Ubah Kegiatan Rencana"}
-                  </h3>
-                  <button onClick={() => setIsKegModalOpen(false)} className="text-slate-400 hover:text-white">
-                    <i className="fa-solid fa-xmark"></i>
-                  </button>
-                </div>
-
-                <form onSubmit={handleKegSubmit} className="p-6 space-y-4 text-xs text-slate-800">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Judul Agenda</label>
-                    <input
-                      type="text"
-                      required
-                      value={kegTitle}
-                      onChange={(e) => setKegTitle(e.target.value)}
-                      placeholder="Contoh: Rapat Wali Santri Baru"
-                      className="w-full px-3 py-2 border rounded-xl outline-none"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tanggal Mulai</label>
-                      <input
-                        type="date"
-                        required
-                        value={kegStart}
-                        onChange={(e) => setKegStart(e.target.value)}
-                        className="w-full px-3 py-2 border rounded-xl outline-none text-slate-800"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tanggal Selesai</label>
-                      <input
-                        type="date"
-                        required
-                        value={kegEnd}
-                        onChange={(e) => setKegEnd(e.target.value)}
-                        className="w-full px-3 py-2 border rounded-xl outline-none text-slate-800"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Penanggung Jawab (PIC)</label>
-                    <select
-                      value={kegPic}
-                      onChange={(e) => setKegPic(e.target.value)}
-                      className="w-full px-3 py-2 border rounded-xl outline-none text-slate-800"
-                    >
-                      {adminUsers.map(adm => (
-                        <option key={adm.id} value={adm.id}>{adm.fullName}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Keterangan Tambahan</label>
-                    <textarea
-                      value={kegDesc}
-                      onChange={(e) => setKegDesc(e.target.value)}
-                      className="w-full px-3 py-2 border rounded-xl outline-none"
-                      rows="3"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Status Kegiatan</label>
-                    <select
-                      value={kegStatus}
-                      onChange={(e) => setKegStatus(e.target.value)}
-                      className="w-full px-3 py-2 border rounded-xl outline-none"
-                    >
-                      <option value="Belum Selesai">Belum Selesai</option>
-                      <option value="Selesai">Selesai</option>
-                    </select>
-                  </div>
-
-                  <div className="pt-4 border-t flex items-center justify-end gap-3">
-                    <button type="button" onClick={() => setIsKegModalOpen(false)} className="px-4 py-2 bg-slate-100 rounded-lg">Batal</button>
-                    <button type="submit" className="px-5 py-2 bg-emerald-700 text-white font-bold rounded-lg">Simpan Data</button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
-
-          {/* Modal Informasi / Pengumuman */}
-          {isAnnModalOpen && (
-            <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border">
-                <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
-                  <h3 className="font-bold text-sm">
-                    {annFormType === "add" ? "Buat Pengumuman Baru" : "Edit / Revisi Pengumuman"}
-                  </h3>
-                  <button onClick={() => setIsAnnModalOpen(false)} className="text-slate-400 hover:text-white">
-                    <i className="fa-solid fa-xmark"></i>
-                  </button>
-                </div>
-
-                <form onSubmit={handleAnnSubmit} className="p-6 space-y-4 text-xs text-slate-800">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Judul Pengumuman</label>
-                    <input
-                      type="text"
-                      required
-                      value={annTitle}
-                      onChange={(e) => setAnnTitle(e.target.value)}
-                      placeholder="Masukkan judul pengumuman"
-                      className="w-full px-3 py-2 border rounded-xl outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Isi Detail</label>
-                    <textarea
-                      required
-                      value={annContent}
-                      onChange={(e) => setAnnContent(e.target.value)}
-                      rows="5"
-                      placeholder="Masukkan konten atau deskripsi..."
-                      className="w-full px-3 py-2 border rounded-xl outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Unggah Gambar (Opsional)</label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImgFileChange}
-                      className="w-full text-slate-400"
-                    />
-                    {annImage && (
-                      <div className="mt-3 relative w-full max-h-40 overflow-hidden rounded-xl border">
-                        <img src={annImage} alt="Preview" className="w-full h-full object-cover" />
-                        <button
-                          type="button"
-                          onClick={() => setAnnImage(null)}
-                          className="absolute top-2 right-2 p-1.5 bg-rose-600 text-white rounded-full text-[10px]"
-                        >
-                          <i className="fa-solid fa-trash"></i> Hapus Gambar
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="pt-4 border-t flex items-center justify-end gap-3">
-                    <button type="button" onClick={() => setIsAnnModalOpen(false)} className="px-4 py-2 bg-slate-100 rounded-lg">Batal</button>
-                    <button type="submit" className="px-5 py-2 bg-emerald-700 text-white font-bold rounded-lg">Simpan</button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
-
-          <footer className="fixed bottom-0 left-0 right-0 py-2 bg-slate-900 text-slate-400 text-center text-[9px] tracking-widest font-semibold border-t border-slate-800 z-40">
-            CREATED BY RAFLIANO &copy; 2026 - MANICALENDAR v2.5 STABLE
-          </footer>
-        </div>
-      );
-    }
-
-    // MEMPERBAIKI ROOT INITIALIZATION AGAR TIDAK BLANK
-    const container = document.getElementById('root');
-    if (container) {
-      const root = ReactDOM.createRoot(container);
-      root.render(<App />);
-    }
-  </script>
-</body>
-</html>
+                          <div class="flex flex-col space-y-1.5">
+                            <label class="text-[9px] font-bold text-stone-400 uppercase tracking-wider"><i
